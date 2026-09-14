@@ -1,0 +1,98 @@
+name: Grant Portfolio Admin
+
+# Authorizes an EXISTING Supabase Auth user as a portfolio admin by inserting
+# their auth.users.id into private.admin_users - the sole source of truth
+# public.is_portfolio_admin() checks (see 0001_initial_schema.sql). This is
+# the only table that grants dashboard access; there is no other admin flag,
+# no public-facing bypass, and no user-editable metadata involved.
+#
+# Deliberately workflow_dispatch ONLY - never wired to a push/PR trigger.
+# Granting admin access must always be a deliberate, individually-reviewed
+# action, never an automatic side effect of an unrelated code change.
+#
+# Never creates an Auth user - fails clearly if the email doesn't already
+# exist in auth.users, rather than provisioning one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Email of the EXISTING Supabase Auth user to authorize as portfolio admin"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  grant:
+    name: Authorize an existing Auth user as portfolio admin
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+
+      - name: Look up the existing Auth user by email
+        id: lookup
+        env:
+          EMAIL: ${{ inputs.email }}
+        run: |
+          # Standard SQL string-literal escaping (double any embedded single
+          # quotes) - this value comes from a workflow_dispatch input, so it
+          # is operator-supplied, not attacker-supplied, but it still isn't
+          # interpolated raw.
+          email_escaped=$(printf '%s' "$EMAIL" | sed "s/'/''/g")
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select id, email, created_at from auth.users where email = '${email_escaped}';")
+          echo "$result" | tee /tmp/user_lookup.json
+
+          count=$(echo "$result" | jq 'length')
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly one auth.users row for '$EMAIL', found $count. This workflow never creates an Auth user - the account must already exist (they must have signed in at least once)."
+            exit 1
+          fi
+
+          user_id=$(echo "$result" | jq -r '.[0].id')
+          echo "user_id=$user_id" >> "$GITHUB_OUTPUT"
+          echo "Found existing auth.users row: id=$user_id"
+
+      - name: Insert into private.admin_users (idempotent)
+        env:
+          USER_ID: ${{ steps.lookup.outputs.user_id }}
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "insert into private.admin_users (user_id) values ('${USER_ID}') on conflict (user_id) do nothing;"
+
+      - name: Verify the admin_users row now exists for this user
+        env:
+          USER_ID: ${{ steps.lookup.outputs.user_id }}
+          EMAIL: ${{ inputs.email }}
+        run: |
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select au.user_id, u.email, au.created_at
+             from private.admin_users au
+             join auth.users u on u.id = au.user_id
+             where au.user_id = '${USER_ID}';")
+          echo "$result" | tee /tmp/verify.json
+          {
+            echo "### Portfolio admin grant"
+            echo '```json'
+            cat /tmp/verify.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          count=$(echo "$result" | jq 'length')
+          row_email=$(echo "$result" | jq -r '.[0].email // empty')
+
+          if [ "$count" -ne 1 ] || [ "$row_email" != "$EMAIL" ]; then
+            echo "::error::private.admin_users does not contain exactly one row matching $EMAIL after the insert."
+            exit 1
+          fi
+          echo "Confirmed: private.admin_users now contains user_id=$USER_ID (email=$EMAIL)."
