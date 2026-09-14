@@ -40,6 +40,59 @@ export interface BingApiRow {
   Impressions?: number;
 }
 
+export interface BingSiteRecord {
+  Url?: string;
+  IsVerified?: boolean;
+  [key: string]: unknown;
+}
+
+/** Normalize a site URL for comparison - protocol, www and trailing slash all
+ * vary between what's configured and what a provider returns for "the same"
+ * site, so a byte-for-byte match would false-negative constantly. */
+export function normalizeSiteUrl(u: string): string {
+  return u
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "");
+}
+
+/**
+ * Find the exact site record Bing itself returned for a configured URL -
+ * never assume the configured value is what the API actually grants access
+ * to. Returns null if this API key has no access to that site at all.
+ */
+export function findMatchingBingSite(
+  sites: BingSiteRecord[],
+  configuredUrl: string,
+): BingSiteRecord | null {
+  const target = normalizeSiteUrl(configuredUrl);
+  return (
+    sites.find(
+      (s) => typeof s.Url === "string" && normalizeSiteUrl(s.Url) === target,
+    ) ?? null
+  );
+}
+
+/**
+ * Bing's legacy JSON-RPC-style API can return HTTP 200 with an error
+ * description instead of (or alongside) the `d` array. A bare {"d": [...]}
+ * is the only shape that counts as a legitimate response; anything else -
+ * extra top-level keys, or `d` missing/null - must not be read as "no data".
+ */
+export function hasEmbeddedBingError(parsed: unknown): boolean {
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return true;
+  }
+  const keys = Object.keys(parsed as Record<string, unknown>);
+  const nonDataKeys = keys.filter(
+    (k) => k.toLowerCase() !== "d" && k.toLowerCase() !== "__type",
+  );
+  const d = (parsed as Record<string, unknown>).d;
+  return nonDataKeys.length > 0 || d === undefined || d === null;
+}
+
 export interface BingDailyRow {
   site_id: string;
   engine: "bing";
