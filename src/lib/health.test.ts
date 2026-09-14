@@ -4,13 +4,23 @@ import { computeHealth } from "@/lib/health";
 const NOW = new Date("2026-06-21T12:00:00Z");
 
 // Default last_attempt_at to a real timestamp so fixtures aren't treated as
-// "never attempted" unless they explicitly set it null.
+// "never attempted" unless they explicitly set it null. Default
+// last_rows_written to a nonzero value so existing fixtures aren't treated
+// as the zero-row-success case unless they explicitly opt in.
 function status(
-  o: Omit<Parameters<typeof computeHealth>[0], "last_attempt_at"> & {
+  o: Omit<
+    Parameters<typeof computeHealth>[0],
+    "last_attempt_at" | "last_rows_written"
+  > & {
     last_attempt_at?: string | null;
+    last_rows_written?: number;
   },
 ): Parameters<typeof computeHealth>[0] {
-  return { last_attempt_at: "2026-06-20T04:00:00Z", ...o };
+  return {
+    last_attempt_at: "2026-06-20T04:00:00Z",
+    last_rows_written: 5,
+    ...o,
+  };
 }
 
 describe("computeHealth", () => {
@@ -124,6 +134,23 @@ describe("computeHealth", () => {
         NOW,
       ).level,
     ).toBe("critical");
+  });
+
+  it("is healthy (not critical/warning) on a successful zero-row sync, with a distinct reason", () => {
+    const result = computeHealth(
+      status({
+        enabled: true,
+        last_status: "success",
+        last_success_at: "2026-06-21T06:00:00Z",
+        consecutive_failures: 0,
+        stale_after_hours: 36,
+        last_error_code: null,
+        last_rows_written: 0,
+      }),
+      NOW,
+    );
+    expect(result.level).toBe("healthy");
+    expect(result.reason).toMatch(/no data returned yet/i);
   });
 
   it("warns when data is stale but not critically so", () => {

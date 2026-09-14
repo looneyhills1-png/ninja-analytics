@@ -52,6 +52,7 @@ export function computeHealth(
     | "consecutive_failures"
     | "stale_after_hours"
     | "last_error_code"
+    | "last_rows_written"
   >,
   now: Date = new Date(),
 ): IntegrationHealth {
@@ -151,6 +152,15 @@ export function computeHealth(
   }
 
   // ---- Healthy ------------------------------------------------------------
+  // A successful sync that legitimately fetched zero rows (a real, parsed
+  // provider response - not a swallowed error) is still "connected/current",
+  // not a failure. Say so explicitly rather than implying data exists.
+  if (status.last_rows_written === 0) {
+    return {
+      ...HEALTHY,
+      reason: `No data returned yet - last successful sync ${ago(lastSuccess, now)}.`,
+    };
+  }
   return {
     ...HEALTHY,
     reason: `Last success ${ago(lastSuccess, now)}.`,
