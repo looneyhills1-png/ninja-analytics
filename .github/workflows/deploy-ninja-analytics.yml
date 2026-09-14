@@ -131,7 +131,12 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           for fn in manual-sync scheduled-uptime; do
-            if ! jq -e --arg fn "$fn" 'any(.[]; (.slug // .name // "") == $fn)' /tmp/functions_list.json > /dev/null; then
+            # supabase functions list --output-format json has returned both a
+            # bare array and {"functions": [...]} across CLI versions - accept
+            # either shape rather than assuming the root itself is the array.
+            if ! jq -e --arg fn "$fn" \
+              '(if type == "array" then . else .functions end) | any(.[]; (.slug // .name // "") == $fn)' \
+              /tmp/functions_list.json > /dev/null; then
               echo "::error::$fn not found in supabase functions list output"
               exit 1
             fi
