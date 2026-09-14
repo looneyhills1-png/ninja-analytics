@@ -99,5 +99,8 @@ verify_jwt = false
 [functions.ai-briefing]
 verify_jwt = false
 
+[functions.diagnose-bing]
+verify_jwt = false
+
 [analytics]
 enabled = false
