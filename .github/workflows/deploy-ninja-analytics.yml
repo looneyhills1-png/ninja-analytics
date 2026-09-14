@@ -267,4 +267,44 @@ jobs:
             exit 1
           fi
 
-          echo "All live checks passed: migration applied, both functions deployed, health check callable, GSC/GA4/Bing/uptime all wrote rows with a successful status." >> "$GITHUB_STEP_SUMMARY"
+          echo "All live checks passed: migration applied, all functions deployed, health check callable, GSC/GA4/Bing/uptime all wrote rows with a successful status." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deep per-provider proof - real rows, not just a status flag
+        run: |
+          # A "success" status only proves the adapter ran without throwing.
+          # This proves what it actually wrote: the exact sync_runs attempt
+          # (rows_fetched/rows_written/range/error) and the current row count
+          # in the actual metrics table each source writes to, per site. A
+          # provider returning zero rows for the requested range is a
+          # legitimate outcome (e.g. a brand-new property with no traffic
+          # yet) - this reports rows_fetched/rows_written explicitly instead
+          # of treating zero as pass/fail on its own, so a real zero-result
+          # sync is never confused with a dispatch that never ran.
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.name, sr.source, sr.status, sr.started_at, sr.finished_at,
+                    sr.rows_fetched, sr.rows_written, sr.range_start, sr.range_end,
+                    sr.error_code, sr.error_message
+             from public.sync_runs sr
+             join public.sites s on s.id = sr.site_id
+             where sr.started_at > now() - interval '10 minutes'
+             order by s.name, sr.source, sr.started_at desc;" | tee /tmp/recent_runs.json
+
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.name,
+                    (select count(*) from public.analytics_daily a where a.site_id = s.id) as ga4_rows,
+                    (select count(*) from public.search_daily sd where sd.site_id = s.id and sd.engine = 'google') as gsc_search_daily_rows,
+                    (select count(*) from public.search_daily sd where sd.site_id = s.id and sd.engine = 'bing') as bing_search_daily_rows,
+                    (select count(*) from public.search_query_daily sq where sq.site_id = s.id and sq.engine = 'google') as gsc_query_rows,
+                    (select count(*) from public.search_page_daily sp where sp.site_id = s.id and sp.engine = 'google') as gsc_page_rows,
+                    (select jsonb_build_object('ok', u.ok, 'status_code', u.status_code, 'checked_at', u.checked_at)
+                     from public.uptime_checks u where u.site_id = s.id order by u.checked_at desc limit 1) as latest_uptime
+             from public.sites s
+             order by s.name;" | tee /tmp/table_row_proof.json
+
+          {
+            echo "### Deep per-provider proof"
+            echo "**Recent sync_runs (last 10 minutes) - the actual attempt, not just current status:**"
+            echo '```json'; cat /tmp/recent_runs.json; echo '```'
+            echo "**Real row counts in each source's own table, per site:**"
+            echo '```json'; cat /tmp/table_row_proof.json; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
