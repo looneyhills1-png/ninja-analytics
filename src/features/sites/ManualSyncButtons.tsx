@@ -3,7 +3,7 @@ import { useManualSync } from "@/lib/hooks";
 import {
   ManualSyncError,
   type ManualSource,
-  type ManualSyncOutcome,
+  type ManualSyncResult,
   type SiteWithStatuses,
 } from "@/lib/api";
 import { SOURCES, SOURCE_SHORT } from "@/lib/sources";
@@ -24,7 +24,7 @@ export function ManualSyncButtons({ site }: { site: SiteWithStatuses }) {
   const run = (source: ManualSource) => {
     setFeedback(null);
     mutation.mutate(source, {
-      onSuccess: (runs: ManualSyncOutcome[]) => setFeedback(summarize(runs)),
+      onSuccess: (result: ManualSyncResult) => setFeedback(summarize(result)),
       onError: (err) => setFeedback(toFeedback(err)),
     });
   };
@@ -59,17 +59,19 @@ export function ManualSyncButtons({ site }: { site: SiteWithStatuses }) {
   );
 }
 
-function summarize(runs: ManualSyncOutcome[]): Feedback {
+function summarize({ runs, uptime }: ManualSyncResult): Feedback {
   const ok = runs.filter(
     (r) => r.status === "success" || r.status === "partial",
   );
   const failed = runs.filter((r) => r.status === "failed");
   const conflict = runs.filter((r) => r.status === "conflict");
+  const uptimeSuffix =
+    uptime == null ? "" : uptime.ok ? " Site is up." : " Site is down.";
 
   if (failed.length && !ok.length) {
     return {
       tone: "error",
-      text: "Sync failed. Open Sync history for the sanitized error detail.",
+      text: `Sync failed. Open Sync history for the sanitized error detail.${uptimeSuffix}`,
     };
   }
   if (failed.length || conflict.length) {
@@ -77,13 +79,21 @@ function summarize(runs: ManualSyncOutcome[]): Feedback {
       tone: "info",
       text: `Completed with issues: ${ok.length} ok, ${failed.length} failed${
         conflict.length ? `, ${conflict.length} already running` : ""
-      }.`,
+      }.${uptimeSuffix}`,
+    };
+  }
+  if (!ok.length && uptime != null) {
+    return {
+      tone: uptime.ok ? "success" : "error",
+      text: uptime.ok
+        ? "Site is up."
+        : `Site is down${uptime.error ? ` (${uptime.error})` : ""}.`,
     };
   }
   const written = ok.reduce((t, r) => t + (r.rowsWritten ?? 0), 0);
   return {
     tone: "success",
-    text: `Sync complete - ${written} rows written.`,
+    text: `Sync complete - ${written} rows written.${uptimeSuffix}`,
   };
 }
 

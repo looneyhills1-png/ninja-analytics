@@ -2,9 +2,9 @@
 // Vitest. The edge functions import these helpers to validate caller input.
 
 export type SyncSource = "gsc" | "ga4" | "bing";
-export type ManualSource = SyncSource | "all";
+export type ManualSource = SyncSource | "all" | "uptime";
 
-const SOURCES: ManualSource[] = ["gsc", "ga4", "bing", "all"];
+const SOURCES: ManualSource[] = ["gsc", "ga4", "bing", "all", "uptime"];
 
 // Accept any well-formed UUID shape (the DB is the real authority on whether a
 // row exists). Strict version/variant enforcement wrongly rejected the seed
@@ -45,7 +45,10 @@ export function parseManualSyncInput(
     typeof b.source !== "string" ||
     !SOURCES.includes(b.source as ManualSource)
   ) {
-    return { ok: false, error: "source must be one of gsc, ga4, bing, all" };
+    return {
+      ok: false,
+      error: "source must be one of gsc, ga4, bing, all, uptime",
+    };
   }
 
   const range = parseOptionalRange(b.rangeStart, b.rangeEnd);
@@ -88,7 +91,18 @@ function parseOptionalRange(
   return { ok: true, value: { rangeStart: start, rangeEnd: end } };
 }
 
-/** Expand a manual "all" into the concrete sources to run. */
+/**
+ * Expand a manual source into the concrete sync-run sources to run. "uptime"
+ * is not a sync-run source (see runIntegrationSync) - callers handle it
+ * separately - so it expands to none here.
+ */
 export function expandSources(source: ManualSource): SyncSource[] {
-  return source === "all" ? ["gsc", "ga4", "bing"] : [source];
+  if (source === "all") return ["gsc", "ga4", "bing"];
+  if (source === "uptime") return [];
+  return [source];
+}
+
+/** Whether a manual source should also run the uptime probe. */
+export function includesUptime(source: ManualSource): boolean {
+  return source === "all" || source === "uptime";
 }

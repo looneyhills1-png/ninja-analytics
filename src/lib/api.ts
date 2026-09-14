@@ -246,13 +246,27 @@ export async function getSyncRuns(
 }
 
 // Manual sync -----------------------------------------------------------------
-export type ManualSource = SyncSource | "all";
+export type ManualSource = SyncSource | "all" | "uptime";
 
 export interface ManualSyncOutcome {
   source: SyncSource;
   status: "success" | "partial" | "failed" | "conflict" | "skipped";
   runId?: string;
   rowsWritten?: number;
+}
+
+/** Uptime has no sync_runs lifecycle - "all" and "uptime" return this
+ * alongside `runs` instead of adding a fourth ManualSyncOutcome shape. */
+export interface ManualUptimeResult {
+  ok: boolean;
+  status_code: number | null;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+export interface ManualSyncResult {
+  runs: ManualSyncOutcome[];
+  uptime?: ManualUptimeResult;
 }
 
 export class ManualSyncError extends Error {
@@ -273,10 +287,11 @@ export class ManualSyncError extends Error {
 export async function invokeManualSync(
   siteId: string,
   source: ManualSource,
-): Promise<ManualSyncOutcome[]> {
+): Promise<ManualSyncResult> {
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     runs: ManualSyncOutcome[];
+    uptime?: ManualUptimeResult;
   }>("manual-sync", { body: { siteId, source } });
 
   if (error) {
@@ -300,7 +315,7 @@ export async function invokeManualSync(
     throw new ManualSyncError(code, message, status);
   }
 
-  return data?.runs ?? [];
+  return { runs: data?.runs ?? [], uptime: data?.uptime };
 }
 
 // Site management -------------------------------------------------------------

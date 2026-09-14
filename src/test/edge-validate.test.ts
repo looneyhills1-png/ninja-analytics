@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   expandSources,
+  includesUptime,
   isUuid,
   parseManualSyncInput,
 } from "../../supabase/functions/_shared/validate";
@@ -24,6 +25,11 @@ describe("isUuid", () => {
 describe("parseManualSyncInput", () => {
   it("accepts a valid site + source", () => {
     const r = parseManualSyncInput({ siteId: UUID, source: "gsc" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts the uptime source", () => {
+    const r = parseManualSyncInput({ siteId: UUID, source: "uptime" });
     expect(r.ok).toBe(true);
   });
 
@@ -73,10 +79,25 @@ describe("parseManualSyncInput", () => {
 });
 
 describe("expandSources", () => {
-  it("expands 'all' to the three sources", () => {
+  it("expands 'all' to the three sync sources", () => {
     expect(expandSources("all")).toEqual(["gsc", "ga4", "bing"]);
   });
   it("returns a single source as-is", () => {
     expect(expandSources("bing")).toEqual(["bing"]);
+  });
+  it("expands 'uptime' to no sync-run sources", () => {
+    expect(expandSources("uptime")).toEqual([]);
+  });
+});
+
+describe("includesUptime", () => {
+  it("is true for 'all' and 'uptime'", () => {
+    expect(includesUptime("all")).toBe(true);
+    expect(includesUptime("uptime")).toBe(true);
+  });
+  it("is false for a single sync source", () => {
+    expect(includesUptime("gsc")).toBe(false);
+    expect(includesUptime("ga4")).toBe(false);
+    expect(includesUptime("bing")).toBe(false);
   });
 });

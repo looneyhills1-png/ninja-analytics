@@ -9,6 +9,9 @@ export interface SiteRow {
   gsc_property: string | null;
   ga4_property_id: string | null;
   bing_site_url: string | null;
+  /** Only present when the caller's SITE_COLUMNS selects it (e.g. manual-sync
+   * for the uptime probe) - not needed by the gsc/ga4/bing adapters. */
+  website_url?: string;
 }
 
 export interface SyncContext {

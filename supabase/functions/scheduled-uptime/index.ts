@@ -11,88 +11,17 @@
 
 import { requireAutomationSecret } from "../_shared/auth.ts";
 import { createAdminClient } from "../_shared/database.ts";
-import { normalizeError, sanitizeMessage } from "../_shared/errors.ts";
+import { normalizeError } from "../_shared/errors.ts";
 import { json } from "../_shared/response.ts";
+import {
+  checkSiteUptime,
+  type UptimeCheckResult,
+  type UptimeSiteRow,
+} from "../_shared/uptime.ts";
 
 const MAX_SITES_PER_RUN = 100;
 const CONCURRENCY = 5;
-const REQUEST_TIMEOUT_MS = 10_000;
 const RETENTION_DAYS = 90;
-
-interface SiteRow {
-  id: string;
-  website_url: string;
-}
-
-interface CheckResult {
-  site_id: string;
-  checked_at: string;
-  ok: boolean;
-  status_code: number | null;
-  latency_ms: number | null;
-  error: string | null;
-}
-
-function probeUrl(raw: string): URL | null {
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    if (url.username || url.password) return null;
-    return url;
-  } catch {
-    return null;
-  }
-}
-
-async function checkSite(site: SiteRow): Promise<CheckResult> {
-  const checkedAt = new Date().toISOString();
-  const url = probeUrl(site.website_url);
-  if (!url) {
-    return {
-      site_id: site.id,
-      checked_at: checkedAt,
-      ok: false,
-      status_code: null,
-      latency_ms: null,
-      error: "invalid_url",
-    };
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const startedAt = performance.now();
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { "User-Agent": "site-analytics-uptime/1.0" },
-    });
-    const latency = Math.round(performance.now() - startedAt);
-    // Drain (bounded) so the connection can be reused/closed cleanly.
-    await res.body?.cancel();
-    return {
-      site_id: site.id,
-      checked_at: checkedAt,
-      ok: res.status < 400,
-      status_code: res.status,
-      latency_ms: latency,
-      error: res.status < 400 ? null : `http_${res.status}`,
-    };
-  } catch (err) {
-    const aborted = (err as { name?: string })?.name === "AbortError";
-    return {
-      site_id: site.id,
-      checked_at: checkedAt,
-      ok: false,
-      status_code: null,
-      latency_ms: aborted ? REQUEST_TIMEOUT_MS : null,
-      error: aborted ? "timeout" : sanitizeMessage(err, 120),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 Deno.serve(async (req) => {
   try {
@@ -113,15 +42,15 @@ Deno.serve(async (req) => {
     return json(500, { ok: false, error: normalizeError(error).code });
   }
 
-  const queue = [...((sites ?? []) as SiteRow[])];
-  const results: CheckResult[] = [];
+  const queue = [...((sites ?? []) as UptimeSiteRow[])];
+  const results: UptimeCheckResult[] = [];
   const workers = Array.from(
     { length: Math.min(CONCURRENCY, queue.length) },
     async () => {
       for (;;) {
         const site = queue.shift();
         if (!site) return;
-        results.push(await checkSite(site));
+        results.push(await checkSiteUptime(site));
       }
     },
   );
