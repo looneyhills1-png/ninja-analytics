@@ -160,7 +160,7 @@ Create a new Supabase project in the dashboard. In **Project Settings → API**,
 
 Then apply the database migrations. They create the tables, RLS policies, Edge Functions' database permissions, scheduled cron jobs, and retention jobs.
 
-Open the **SQL Editor**, then open each file in [`supabase/migrations/`](supabase/migrations) on GitHub in filename order (`0001` → `0010`), paste its contents into a new query, and run it - one file at a time, in order.
+Open the **SQL Editor**, then open each file in [`supabase/migrations/`](supabase/migrations) on GitHub in filename order (`0001` → `0011`), paste its contents into a new query, and run it - one file at a time, in order.
 
 Afterwards, open **Integrations → Cron → Jobs**: five jobs (three daily syncs, an hourly uptime check, and a weekly cleanup) should be listed. Scheduled syncs will report configuration errors until the secrets in the next steps exist; they do not affect an unrelated project.
 
@@ -314,6 +314,105 @@ Then sign out, sign back in, and the app shows a fresh QR. Because TOTP secrets 
 - The uptime prober only fetches `http(s)` URLs already stored in the admin-managed sites table, with a 10 s timeout, bounded concurrency, and 90-day self-pruning retention.
 - The AI briefing endpoint requires admin + `aal2`, refuses when no `ANTHROPIC_API_KEY` secret is set, size-caps its input, and sanitizes provider errors so credentials can never leak.
 - Local seed data is synthetic. `supabase db reset` resets only the local Docker database unless you deliberately target a hosted project with other CLI commands.
+
+## Ninja Analytics Operations
+
+This section is the operator reference for running this deployment day to day: where the data lives, what runs on a schedule, which secrets it needs, and how to check on it without hand-writing SQL each time.
+
+### Architecture
+
+```mermaid
+flowchart LR
+  Cron["pg_cron (5 jobs)"] -->|pg_net| Edge["Edge Functions"]
+  Browser["Browser (manual sync / health)"] --> Edge
+  Edge --> DB[("Postgres: sites, analytics_daily,\nsearch_daily(+query/page), sync_runs,\nintegration_status, uptime_checks,\ntracked_queries")]
+  Edge --> GSC["Google Search Console API"]
+  Edge --> GA4["Google Analytics Data API"]
+  Edge --> Bing["Bing Webmaster API"]
+```
+
+### Tables
+
+| Table | What it holds |
+| --- | --- |
+| `public.sites` | One row per tracked site: domain, `website_url`, and each provider's identifier (`gsc_property`, `ga4_property_id`, `bing_site_url`). |
+| `public.analytics_daily` | GA4 daily aggregate (`active_users`, `sessions`, `screen_page_views`, ...), one row per `(site_id, metric_date)`. |
+| `public.search_daily` | Google **and** Bing daily aggregate (`engine` = `google`/`bing`), one row per `(site_id, engine, metric_date)`. |
+| `public.search_query_daily` / `public.search_page_daily` | Top Search Console queries/pages per day, also `engine`-aware. |
+| `public.sync_runs` | Append-only attempt log - one row per sync attempt. Real timestamp columns are `started_at`/`finished_at` (there is no `created_at`). `source` is `gsc`/`ga4`/`bing` only - uptime is not a sync-run source. |
+| `public.integration_status` | Current state, one row per `(site_id, source)`: `last_status`, `last_success_at`, `consecutive_failures`, `last_error_code/message`, `stale_after_hours`. Auto-created per site by `seed_integration_status()`. |
+| `public.uptime_checks` | One row per uptime probe (`checked_at`, `ok`, `status_code`, `latency_ms`, `error`). Self-pruned to 90 days by the uptime function itself. |
+| `public.tracked_queries` | Starred Search Console queries the dashboard charts position history for. |
+
+All of the above are RLS-protected (admin allowlist + `aal2`) and are exactly what's declared in [`supabase/migrations/`](supabase/migrations) - there is no separate `integration_sync_runs` table and no `created_at` column on `sync_runs`.
+
+### Edge Functions
+
+| Function | Trigger | What it does |
+| --- | --- | --- |
+| `scheduled-sync-gsc` / `-ga4` / `-bing` | Cron (automation secret) | Sync every active site for that one source; write `sync_runs` + `integration_status`. |
+| `scheduled-uptime` | Cron (automation secret) | Probe every active site's `website_url`; write `uptime_checks`; self-prune rows older than 90 days. |
+| `manual-sync` | Browser (admin + `aal2`) | One site, one source (`gsc`/`ga4`/`bing`/`all`/`uptime`). `all` and `uptime` also run the uptime probe (added in `0011` - previously `all` only covered gsc/ga4/bing). |
+| `manage-sites` | Browser (admin + `aal2`) | Create/update/delete tracked sites; reconciles `integration_status.enabled` with configured provider ids. |
+| `manage-portfolio` | Browser (admin + `aal2`) | Add/remove tracked queries. |
+| `ai-briefing` | Browser (admin + `aal2`) | Optional Claude-generated portfolio narrative; no-ops without `ANTHROPIC_API_KEY`. |
+
+### Cron jobs
+
+Five `pg_cron` jobs, all UTC, all defined in [`0005_cron_jobs.sql`](supabase/migrations/0005_cron_jobs.sql), [`0008_data_retention.sql`](supabase/migrations/0008_data_retention.sql), and [`0009_v2_features.sql`](supabase/migrations/0009_v2_features.sql):
+
+| Job | Schedule | Calls |
+| --- | --- | --- |
+| `site-analytics-sync-gsc` | `0 4 * * *` (daily) | `public.invoke_scheduled_sync('gsc')` |
+| `site-analytics-sync-ga4` | `10 4 * * *` (daily) | `public.invoke_scheduled_sync('ga4')` |
+| `site-analytics-sync-bing` | `20 4 * * *` (daily) | `public.invoke_scheduled_sync('bing')` |
+| `site-analytics-uptime` | `45 * * * *` (hourly) | `public.invoke_scheduled_uptime()` |
+| `site-analytics-cleanup` | `30 3 * * 0` (weekly, Sunday) | `public.run_cleanup()` (data retention) |
+
+Every one of these helper functions reads `project_url` and `automation_secret` from **Supabase Vault** and POSTs to the matching Edge Function with an `X-Automation-Secret` header - no secret ever appears in `cron.job.command`.
+
+### Required secrets
+
+| Secret | Where | Used by |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` | Edge Function secrets | `scheduled-sync-gsc`/`-ga4`, `manual-sync` (gsc/ga4) |
+| `BING_WEBMASTER_API_KEY` | Edge Function secrets | `scheduled-sync-bing`, `manual-sync` (bing) |
+| `AUTOMATION_SECRET` | Edge Function secrets **and** Vault (`automation_secret`) | All `scheduled-*` functions' caller auth |
+| `project_url` | Vault only | `invoke_scheduled_sync`, `invoke_scheduled_uptime`, `run_all_analytics_syncs` |
+| `ALLOWED_APP_ORIGIN` | Edge Function secrets | CORS on browser-invoked functions |
+| `ANTHROPIC_API_KEY` (optional) | Edge Function secrets | `ai-briefing` only |
+
+See [Set Edge Function secrets and Vault values](#4-set-edge-function-secrets-and-vault-values) for how to set these.
+
+### One-call health check
+
+`public.ninja_analytics_health()` (added in [`0011_health_and_manual_full_sync.sql`](supabase/migrations/0011_health_and_manual_full_sync.sql)) returns one JSON snapshot: per site, each integration's `last_status`/`last_success_at`/`consecutive_failures`/`last_error_code`/`last_error_message`, the latest uptime check, core table row counts, and whether the five cron jobs above exist and are active.
+
+```sql
+select public.ninja_analytics_health();
+```
+
+Requires admin + `aal2` when called through the app/API, same as `get_db_usage()`. Run directly as `postgres`/`supabase_admin` in the SQL editor and that check is skipped (the same recovery carve-out `0003`'s MFA guard already uses) - see that migration's comments for why this is safe under `SECURITY DEFINER` (it checks `session_user`, not `current_user`).
+
+### One-call manual full sync
+
+`public.run_all_analytics_syncs()` (same migration) dispatches GSC + GA4 + Bing + uptime in a single call, instead of four separate `select invoke_scheduled_sync(...)` statements:
+
+```sql
+select public.run_all_analytics_syncs();
+```
+
+`pg_net` dispatch is asynchronous, so this returns the four request ids immediately, not results. Re-run `ninja_analytics_health()` (or check `sync_runs`/`uptime_checks`) a few seconds later for the outcome.
+
+From the browser, the **Manual sync** panel's "Run all enabled" button does the same thing for one site at a time (`manual-sync` with `source: "all"`), synchronously, and now includes the uptime probe.
+
+### Where failures are logged
+
+- **Per-attempt detail:** `public.sync_runs` - `status`, `error_code`, `error_message` (sanitized: credentials/tokens/JWTs are stripped before storage), `rows_fetched`/`rows_written`, `duration_ms`.
+- **Current state:** `public.integration_status.last_error_code`/`last_error_message`, plus `consecutive_failures` for at-a-glance staleness.
+- **Uptime:** `public.uptime_checks.error` (`invalid_url`, `timeout`, `http_4xx`/`http_5xx`, or a sanitized network error).
+- **Did the cron job even fire:** `cron.job_run_details` (`status`, `return_message`, `start_time`).
+- **Did the Edge Function answer:** `net._http_response` (`status_code`, `created`) - a cron invocation succeeding only means the HTTP request was sent, not that the provider sync itself succeeded; `sync_runs` is the actual source of truth.
 
 ## Commands
 

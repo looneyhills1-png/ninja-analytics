@@ -2,12 +2,17 @@ import { preflight, corsHeaders } from "../_shared/cors.ts";
 import { json } from "../_shared/response.ts";
 import { requireAdminMfa } from "../_shared/auth.ts";
 import { normalizeError } from "../_shared/errors.ts";
-import { parseManualSyncInput, expandSources } from "../_shared/validate.ts";
+import {
+  parseManualSyncInput,
+  expandSources,
+  includesUptime,
+} from "../_shared/validate.ts";
 import { runIntegrationSync, type SiteRow } from "../_shared/sync-run.ts";
 import { ADAPTERS } from "../_shared/registry.ts";
+import { checkSiteUptime } from "../_shared/uptime.ts";
 
 const SITE_COLUMNS =
-  "id,name,domain,gsc_property,ga4_property_id,bing_site_url";
+  "id,name,domain,website_url,gsc_property,ga4_property_id,bing_site_url";
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -61,6 +66,22 @@ Deno.serve(async (req) => {
       runs.push(outcome);
     }
 
+    // Uptime has no sync_runs lifecycle (see _shared/uptime.ts) - it is a
+    // single probe + insert, run alongside gsc/ga4/bing for "all", or alone
+    // for "uptime".
+    let uptime;
+    if (includesUptime(source)) {
+      const siteWithUrl = site as SiteRow & { website_url: string };
+      uptime = await checkSiteUptime({
+        id: siteWithUrl.id,
+        website_url: siteWithUrl.website_url,
+      });
+      const { error: uptimeError } = await admin
+        .from("uptime_checks")
+        .insert(uptime);
+      if (uptimeError) throw uptimeError;
+    }
+
     // A single-source request that conflicts maps to HTTP 409 so the UI can
     // show "already running". Multi-source ("all") always returns 200 with
     // per-source outcomes.
@@ -68,7 +89,7 @@ Deno.serve(async (req) => {
       return json(409, { ok: false, error: "already_running", runs }, cors);
     }
 
-    return json(200, { ok: true, runs }, cors);
+    return json(200, { ok: true, runs, uptime }, cors);
   } catch (err) {
     const n = normalizeError(err);
     return json(

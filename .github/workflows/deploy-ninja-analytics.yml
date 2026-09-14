@@ -1,0 +1,247 @@
+name: Deploy Ninja Analytics
+
+# Live-deploys and live-verifies the Supabase side of this project: applies
+# pending migrations, deploys manual-sync + scheduled-uptime, then proves the
+# result by actually calling the new health-check/full-sync functions and
+# checking that GSC/GA4/Bing/uptime rows land - not just that the code
+# compiles or the functions upload.
+#
+# Auth: SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF only (GitHub Actions
+# repository secrets). No SUPABASE_DB_PASSWORD is set or requested - `supabase
+# db push` is attempted for real, and if it turns out to need a direct
+# Postgres connection, the workflow falls back to applying the one new
+# migration (0011 - idempotent create-or-replace/grant/revoke statements
+# only, no CREATE TABLE) through the Supabase Management API's
+# database/query endpoint instead, which authenticates with the access token
+# alone. See scripts/mgmt_sql.sh.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/deploy-ninja-analytics.yml"
+
+concurrency:
+  group: deploy-ninja-analytics-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Link, migrate, deploy, verify live
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+          echo "Project ref: ${SUPABASE_PROJECT_REF}"
+
+      - name: Link to the live project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Diagnostic - identity used by the Management API query endpoint
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select session_user, current_user, current_setting('is_superuser') as is_superuser;" \
+            | tee /tmp/identity.json
+          {
+            echo "### Management API connection identity"
+            echo '```json'
+            cat /tmp/identity.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Migration dry-run (informational only, no side effects)
+        continue-on-error: true
+        run: supabase db push --linked --dry-run --include-all
+
+      - name: "Attempt: supabase db push (real, no password given)"
+        id: db_push
+        continue-on-error: true
+        run: |
+          set +e
+          supabase db push --linked --include-all 2>&1 | tee /tmp/db_push.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Report db push outcome
+        run: |
+          {
+            echo "### supabase db push --linked --include-all"
+            echo "Outcome: **${{ steps.db_push.outcome }}**"
+            echo '```'
+            cat /tmp/db_push.log 2>/dev/null || echo "(no log captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Fallback: apply migration 0011 via Management API (no DB password)"
+        if: steps.db_push.outcome == 'failure'
+        run: |
+          echo "supabase db push failed without a DB password (see 'Report db push outcome' step for the exact error)." \
+            "Applying migration 0011 directly instead - it is safe to run standalone:" \
+            "every statement is create-or-replace / grant / revoke, there is no CREATE TABLE." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "$(cat supabase/migrations/0011_health_and_manual_full_sync.sql)"
+
+      - name: Verify the two new functions exist in the live database
+        run: |
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select proname from pg_proc where pronamespace = 'public'::regnamespace and proname in ('ninja_analytics_health', 'run_all_analytics_syncs') order by proname;")
+          echo "$result" | tee /tmp/functions_check.json
+          {
+            echo "### public functions present after migration"
+            echo '```json'
+            cat /tmp/functions_check.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          count=$(echo "$result" | jq 'length')
+          if [ "$count" -ne 2 ]; then
+            echo "::error::Expected both ninja_analytics_health and run_all_analytics_syncs in pg_proc, found $count. Migration 0011 was not fully applied."
+            exit 1
+          fi
+
+      - name: Deploy manual-sync
+        run: supabase functions deploy manual-sync --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Deploy scheduled-uptime
+        run: supabase functions deploy scheduled-uptime --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Verify both functions are listed as deployed
+        run: |
+          supabase functions list --project-ref "$SUPABASE_PROJECT_REF" --output-format json \
+            | tee /tmp/functions_list.json
+          {
+            echo "### supabase functions list"
+            echo '```json'
+            cat /tmp/functions_list.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for fn in manual-sync scheduled-uptime; do
+            if ! jq -e --arg fn "$fn" 'any(.[]; (.slug // .name // "") == $fn)' /tmp/functions_list.json > /dev/null; then
+              echo "::error::$fn not found in supabase functions list output"
+              exit 1
+            fi
+          done
+
+      - name: Baseline row counts (before live sync)
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select
+               (select count(*) from public.sync_runs) as sync_runs,
+               (select count(*) from public.uptime_checks) as uptime_checks;" \
+            | tee /tmp/before_counts.json
+
+      - name: Live health check (before)
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh "select public.ninja_analytics_health();" \
+            | tee /tmp/health_before.json
+          {
+            echo "### ninja_analytics_health() - before"
+            echo '```json'
+            cat /tmp/health_before.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger the real GSC + GA4 + Bing + uptime sync
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh "select public.run_all_analytics_syncs();" \
+            | tee /tmp/run_all.json
+          {
+            echo "### run_all_analytics_syncs()"
+            echo '```json'
+            cat /tmp/run_all.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Poll until the dispatched syncs finish (up to 3 minutes)
+        run: |
+          deadline=$((SECONDS + 180))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            sleep 10
+            running=$(bash .github/workflows/scripts/mgmt_sql.sh \
+              "select count(*) as running from public.sync_runs where status = 'running' and started_at > now() - interval '10 minutes';" \
+              | jq '.[0].running')
+            echo "still running: $running"
+            if [ "$running" = "0" ]; then
+              echo "All dispatched sync_runs finished."
+              break
+            fi
+          done
+
+      - name: Live health check (after) + row-count proof
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh "select public.ninja_analytics_health();" \
+            | tee /tmp/health_after.json
+          {
+            echo "### ninja_analytics_health() - after"
+            echo '```json'
+            cat /tmp/health_after.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select
+               (select count(*) from public.sync_runs) as sync_runs,
+               (select count(*) from public.uptime_checks) as uptime_checks;" \
+            | tee /tmp/after_counts.json
+          {
+            echo "### Row counts before vs after"
+            echo "Before:"; echo '```json'; cat /tmp/before_counts.json; echo '```'
+            echo "After:"; echo '```json'; cat /tmp/after_counts.json; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Assert the live pipeline actually wrote rows and each source succeeded
+        run: |
+          before_sync_runs=$(jq '.[0].sync_runs' /tmp/before_counts.json)
+          after_sync_runs=$(jq '.[0].sync_runs' /tmp/after_counts.json)
+          before_uptime=$(jq '.[0].uptime_checks' /tmp/before_counts.json)
+          after_uptime=$(jq '.[0].uptime_checks' /tmp/after_counts.json)
+
+          fail=0
+
+          if [ "$after_sync_runs" -le "$before_sync_runs" ]; then
+            echo "::error::sync_runs row count did not increase ($before_sync_runs -> $after_sync_runs) - run_all_analytics_syncs did not actually dispatch/land any sync."
+            fail=1
+          fi
+          if [ "$after_uptime" -le "$before_uptime" ]; then
+            echo "::error::uptime_checks row count did not increase ($before_uptime -> $after_uptime) - the uptime probe did not run."
+            fail=1
+          fi
+
+          echo "Per-integration status from the final health check:"
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.name, i.source, i.last_status, i.last_error_code, i.last_error_message
+             from public.integration_status i
+             join public.sites s on s.id = i.site_id
+             order by s.name, i.source;" | tee /tmp/final_status.json
+
+          for source in gsc ga4 bing; do
+            status=$(jq -r --arg s "$source" '[.[] | select(.source == $s)][0].last_status // "missing"' /tmp/final_status.json)
+            echo "$source: $status"
+            if [ "$status" != "success" ] && [ "$status" != "partial" ]; then
+              msg=$(jq -r --arg s "$source" '[.[] | select(.source == $s)][0].last_error_message // "no error message"' /tmp/final_status.json)
+              echo "::error::$source sync did not succeed (last_status=$status): $msg"
+              fail=1
+            fi
+          done
+
+          if [ "$fail" -ne 0 ]; then
+            echo "One or more required live checks failed - see the ::error:: annotations above." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "All live checks passed: migration applied, both functions deployed, health check callable, GSC/GA4/Bing/uptime all wrote rows with a successful status." >> "$GITHUB_STEP_SUMMARY"

@@ -6,6 +6,18 @@ This project doesn't yet cut formal GitHub Releases or git tags - version number
 
 ## [Unreleased]
 
+### Added
+
+- `public.ninja_analytics_health()` - one call returning a compact JSON status snapshot: every site's GSC/GA4/Bing sync state and latest error, its latest uptime check, core table row counts, and whether the five `site-analytics-*` cron jobs exist and are active.
+- `public.run_all_analytics_syncs()` - one call that dispatches GSC + GA4 + Bing + uptime together, instead of four separate `invoke_scheduled_sync`/`invoke_scheduled_uptime` calls.
+- `manual-sync` now also runs the uptime probe: `source: "all"` covers GSC + GA4 + Bing + uptime (previously uptime was left out), and `source: "uptime"` runs it alone. The **Manual sync** panel surfaces the result.
+- New migration `0011_health_and_manual_full_sync.sql` adds both functions above.
+- A "Ninja Analytics Operations" README section: architecture, table/column reference, Edge Function and cron inventory, required secrets, and how to run a health check or a manual full sync.
+
+### Fixed
+
+- `scheduled-uptime` and `manual-sync` no longer duplicate the URL-probe logic - both now share `supabase/functions/_shared/uptime.ts`.
+
 ## [0.6.0] - 2026-08-30
 
 ### Added
