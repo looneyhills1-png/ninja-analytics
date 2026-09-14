@@ -1,0 +1,137 @@
+name: Deploy Frontend
+
+# Builds the static dashboard and deploys it to Cloudflare Pages (project
+# "ninja-analytics"), then proves the result live: fetches the deployed page,
+# confirms the bundled JS points at the correct Supabase project, and confirms
+# the Supabase Auth endpoint it will call is reachable.
+#
+# Frontend env vars (VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY,
+# VITE_APP_URL) are all derived at build time from existing secrets - no
+# server-side/secret key is ever read here. VITE_SUPABASE_PUBLISHABLE_KEY
+# comes from the Supabase Management API via scripts/get_supabase_publishable_key.sh,
+# which explicitly refuses to return a secret/service_role key.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.*"
+      - "tsconfig*.json"
+      - ".github/workflows/deploy-frontend.yml"
+
+concurrency:
+  group: deploy-frontend-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_NAME: ninja-analytics
+  PAGES_URL: https://ninja-analytics.pages.dev
+
+jobs:
+  deploy:
+    name: Build and deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+          : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN secret is not set}"
+          : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID secret is not set}"
+
+      - run: npm ci
+
+      - name: Resolve frontend env vars (no server-side secrets)
+        id: env
+        run: |
+          key=$(bash .github/workflows/scripts/get_supabase_publishable_key.sh)
+          echo "::add-mask::$key"
+          {
+            echo "publishable_key=$key"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved VITE_SUPABASE_URL=https://${SUPABASE_PROJECT_REF}.supabase.co"
+          echo "Resolved VITE_APP_URL=${PAGES_URL}"
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ steps.env.outputs.publishable_key }}
+          VITE_APP_URL: ${{ env.PAGES_URL }}
+        run: npm run build
+
+      - name: Confirm the correct project ref is baked into the build
+        run: |
+          if ! grep -rq "${SUPABASE_PROJECT_REF}" dist/assets/*.js; then
+            echo "::error::Built assets do not reference the linked Supabase project ref - VITE_SUPABASE_URL was not baked in correctly."
+            exit 1
+          fi
+          echo "Confirmed: built assets reference the linked Supabase project."
+
+      - name: Ensure the Cloudflare Pages project exists
+        continue-on-error: true
+        run: npx wrangler pages project create "$PROJECT_NAME" --production-branch=main
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        run: |
+          npx wrangler pages deploy dist --project-name="$PROJECT_NAME" --branch=main 2>&1 | tee /tmp/deploy.log
+          {
+            echo "### Cloudflare Pages deploy output"
+            echo '```'
+            cat /tmp/deploy.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify the live page loads
+        run: |
+          code=$(curl -sS -o /tmp/index.html -w '%{http_code}' "$PAGES_URL")
+          echo "GET $PAGES_URL -> HTTP $code"
+          if [ "$code" -ne 200 ]; then
+            echo "::error::$PAGES_URL returned HTTP $code, expected 200"
+            exit 1
+          fi
+          if ! grep -qi "<div id=\"root\"" /tmp/index.html; then
+            echo "::error::$PAGES_URL did not return the expected app shell (no #root div found)"
+            exit 1
+          fi
+          echo "Confirmed: $PAGES_URL serves the app shell with HTTP 200."
+
+      - name: Verify the Supabase Auth endpoint the app will call is reachable
+        run: |
+          auth_url="https://${SUPABASE_PROJECT_REF}.supabase.co/auth/v1/health"
+          code=$(curl -sS -o /tmp/auth_health.json -w '%{http_code}' "$auth_url")
+          echo "GET $auth_url -> HTTP $code"
+          cat /tmp/auth_health.json
+          if [ "$code" -ne 200 ]; then
+            echo "::error::Supabase Auth health endpoint returned HTTP $code, expected 200 - sign-in would fail."
+            exit 1
+          fi
+          {
+            echo "### Live verification"
+            echo "- Page: $PAGES_URL -> HTTP 200, app shell present"
+            echo "- Supabase Auth endpoint: HTTP 200"
+            echo ""
+            echo "**Note:** this confirms the page serves correctly, is wired to the right Supabase project, and that the Auth API it calls is up. It does not perform an actual sign-in - that requires a real admin password + TOTP code, which this workflow never has and must never handle."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Live dashboard URL: $PAGES_URL"
