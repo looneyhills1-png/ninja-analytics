@@ -1,0 +1,82 @@
+name: Diagnose Bing integration live
+
+# One-off, end-to-end live audit of the Bing Webmaster integration:
+# GetUserSites (exact site identity/access), then GetRankAndTrafficStats,
+# GetQueryStats, GetPageStats, GetCrawlStats, GetCrawlIssues using Bing's
+# OWN returned site URL - never the configured value blindly. Detects an
+# error embedded in an HTTP-200 body. Writes the full (key-redacted) report
+# to public.bing_diagnostic_runs via the diagnose-bing Edge Function, which
+# this workflow deploys first.
+#
+# Uses the SAME BING_WEBMASTER_API_KEY Supabase project secret the real
+# scheduled-sync-bing/manual-sync adapters already use - never a GitHub
+# Actions secret, never logged, never echoed. The Edge Function is invoked
+# through the same Vault-secret + net.http_post path invoke_scheduled_sync
+# already uses (0005_cron_jobs.sql), so the AUTOMATION_SECRET never leaves
+# the database either.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+
+      - name: Apply migration 0012 (bing_diagnostic_runs table + invoke_diagnose_bing())
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "$(cat supabase/migrations/0012_bing_diagnostic.sql)"
+
+      - name: Deploy diagnose-bing Edge Function
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy diagnose-bing --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Invoke diagnose-bing (async via Vault-secret net.http_post)
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh "select public.invoke_diagnose_bing();"
+
+      - name: Wait for the diagnostic run to land
+        run: |
+          deadline=$((SECONDS + 60))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            sleep 5
+            count=$(bash .github/workflows/scripts/mgmt_sql.sh \
+              "select count(*) as c from public.bing_diagnostic_runs where created_at > now() - interval '5 minutes';" \
+              | jq '.[0].c')
+            echo "diagnostic runs in last 5 min: $count"
+            if [ "$count" -ge 1 ]; then
+              echo "Diagnostic run landed."
+              break
+            fi
+          done
+
+      - name: Fetch and print the full diagnostic report
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select report from public.bing_diagnostic_runs order by created_at desc limit 1;" \
+            | tee /tmp/bing_report.json
+          {
+            echo "### Bing diagnostic report (full, key already redacted server-side)"
+            echo '```json'
+            cat /tmp/bing_report.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
