@@ -119,9 +119,17 @@ jobs:
           echo "Confirmed: $PAGES_URL serves the app shell with HTTP 200."
 
       - name: Verify the Supabase Auth endpoint the app will call is reachable
+        env:
+          PUBLISHABLE_KEY: ${{ steps.env.outputs.publishable_key }}
         run: |
+          # Supabase's gateway rejects every request without an apikey header
+          # before it reaches the Auth service - even /auth/v1/health, which
+          # otherwise needs no auth of its own. Use the same publishable key
+          # the deployed app itself sends (never the service-role key).
           auth_url="https://${SUPABASE_PROJECT_REF}.supabase.co/auth/v1/health"
-          code=$(curl -sS -o /tmp/auth_health.json -w '%{http_code}' "$auth_url")
+          code=$(curl -sS -o /tmp/auth_health.json -w '%{http_code}' \
+            -H "apikey: ${PUBLISHABLE_KEY}" \
+            "$auth_url")
           echo "GET $auth_url -> HTTP $code"
           cat /tmp/auth_health.json
           if [ "$code" -ne 200 ]; then
