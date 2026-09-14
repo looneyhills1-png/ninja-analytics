@@ -30,20 +30,24 @@ fi
 echo "Keys returned by the Management API (names/types only):" >&2
 jq -c '[.[] | {name, type}]' /tmp/api_keys_response.json >&2
 
-# Accept either API key generation:
+# A project mid-migration returns BOTH key generations at once:
 #   legacy:  {"name": "anon", ...}          vs {"name": "service_role", ...}
 #   current: {"type": "publishable", ...}   vs {"type": "secret", ...}
-# Explicitly exclude anything that looks like a secret/service key rather
-# than assuming "not secret" means "safe" - an unrecognized shape must fail
-# closed, not fall through to picking the wrong key.
-candidates=$(jq -c '[
-  .[] | select(
-    (.type == "publishable") or
-    ((.type == "legacy" or .type == null) and (.name == "anon"))
-  ) | select(
-    (.type != "secret") and (.name != "service_role")
-  )
-]' /tmp/api_keys_response.json)
+# Prefer the current-generation "publishable" key when one exists (this repo's
+# own naming - VITE_SUPABASE_PUBLISHABLE_KEY, not VITE_SUPABASE_ANON_KEY -
+# already committed to it); fall back to the legacy "anon" key only when no
+# publishable key is present. Either way, explicitly exclude anything that
+# looks like a secret/service key rather than assuming "not secret" means
+# "safe" - an unrecognized shape must fail closed, not fall through to
+# picking the wrong key.
+candidates=$(jq -c '
+  ([.[] | select(.type == "publishable")]) as $publishable
+  | if ($publishable | length) > 0
+    then $publishable
+    else [.[] | select((.type == "legacy" or .type == null) and (.name == "anon"))]
+    end
+  | [.[] | select((.type != "secret") and (.name != "service_role"))]
+' /tmp/api_keys_response.json)
 
 count=$(echo "$candidates" | jq 'length')
 
