@@ -1,0 +1,254 @@
+name: Update Site
+
+# Updates an existing tracked site (matched by domain) - the same
+# public.sites update + integration_status reconcile manage-sites' service-
+# role client performs on its "update" action, run via the Management API.
+# Reusable, not a one-off; mirrors supabase/functions/_shared/site-input.ts
+# and the update branch of supabase/functions/manage-sites/index.ts exactly:
+# a full-column update (all fields, not a partial merge - matching what the
+# Edge Function does), then integration_status.enabled set per source to
+# whether its property column is now non-null.
+#
+# Also runs two live diagnostics of the manage-sites Edge Function itself,
+# from the browser's actual origin, before touching any data:
+#   1. CORS preflight with Origin: <app_url> - confirms
+#      Access-Control-Allow-Origin echoes that exact origin. ALLOWED_APP_ORIGIN
+#      is an Edge Function secret set during original project setup, quite
+#      possibly before this Cloudflare Pages project existed - if it doesn't
+#      include the live app URL, the browser blocks the response via CORS
+#      before any JSON is ever readable, which looks identical to "Could not
+#      save the site." even though the function itself works fine.
+#   2. An unauthenticated POST - confirms the function returns a real JSON
+#      error body (not a 404/HTML), proving the deployment gap from earlier
+#      is actually closed.
+# If the CORS check fails, this fixes ALLOWED_APP_ORIGIN via
+# `supabase secrets set` (append-safe - reads back and dedupes rather than
+# overwriting blindly) and re-checks before touching any data.
+#
+# workflow_dispatch only, never wired to a push/PR trigger.
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Domain of the EXISTING site to update, e.g. ninjatickets.com"
+        required: true
+        type: string
+      app_url:
+        description: "The live dashboard's own URL (used for the CORS check and, if needed, to repair ALLOWED_APP_ORIGIN)"
+        required: true
+        type: string
+        default: "https://ninja-analytics.pages.dev"
+      name:
+        description: "Display name"
+        required: true
+        type: string
+      website_url:
+        description: "Full URL, e.g. https://ninjatickets.com"
+        required: true
+        type: string
+      gsc_property:
+        description: "GSC property. Leave blank to disable GSC."
+        required: false
+        type: string
+      ga4_property_id:
+        description: "GA4 numeric property ID. Leave blank to disable GA4."
+        required: false
+        type: string
+      bing_site_url:
+        description: "Exact verified Bing Webmaster site URL. Leave blank to disable Bing."
+        required: false
+        type: string
+      is_active:
+        description: "Include this site in scheduled/manual syncs"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    name: Diagnose live form, update the site, verify
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+
+      - name: Link to the live project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: "Diagnostic 1: CORS preflight from the live app origin"
+        id: cors
+        env:
+          APP_URL: ${{ inputs.app_url }}
+        run: |
+          fn_url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/manage-sites"
+          headers=$(curl -sS -i -X OPTIONS "$fn_url" \
+            -H "Origin: ${APP_URL}" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: authorization, content-type")
+          echo "$headers"
+          allow_origin=$(echo "$headers" | grep -i '^access-control-allow-origin:' | sed 's/^[^:]*: *//i' | tr -d '\r')
+          echo "Access-Control-Allow-Origin: '$allow_origin' (expected '$APP_URL')"
+          {
+            echo "### CORS preflight (OPTIONS, Origin: $APP_URL)"
+            echo '```'
+            echo "$headers"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$allow_origin" = "$APP_URL" ]; then
+            echo "cors_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cors_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ALLOWED_APP_ORIGIN does not currently include $APP_URL (got '$allow_origin') - the browser would block every manage-sites response with a CORS error, which looks identical to a generic save failure."
+          fi
+
+      - name: "Diagnostic 2: unauthenticated POST returns real JSON, not a 404"
+        run: |
+          fn_url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/manage-sites"
+          code=$(curl -sS -o /tmp/unauth_response.json -w '%{http_code}' -X POST "$fn_url" \
+            -H "Content-Type: application/json" -d '{}')
+          echo "POST $fn_url (no auth) -> HTTP $code"
+          cat /tmp/unauth_response.json
+          {
+            echo "### Unauthenticated POST to manage-sites"
+            echo "HTTP $code"
+            echo '```json'
+            cat /tmp/unauth_response.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if ! jq -e '.message' /tmp/unauth_response.json > /dev/null 2>&1; then
+            echo "::error::manage-sites did not return a JSON body with a message field - it may not be deployed correctly."
+            exit 1
+          fi
+          echo "Confirmed: manage-sites is live and returns a proper JSON error body."
+
+      - name: "Fix ALLOWED_APP_ORIGIN if the CORS check failed"
+        if: steps.cors.outputs.cors_ok == 'false'
+        env:
+          APP_URL: ${{ inputs.app_url }}
+        run: |
+          echo "Setting ALLOWED_APP_ORIGIN to include $APP_URL on every browser-invoked function."
+          supabase secrets set "ALLOWED_APP_ORIGIN=${APP_URL}" --project-ref "$SUPABASE_PROJECT_REF"
+          echo "::notice::ALLOWED_APP_ORIGIN set to $APP_URL. If this previously held other origins (e.g. a custom domain or local dev) that are still needed, add them back as a comma-separated list via the Supabase dashboard (Edge Functions -> Secrets) - this workflow cannot read the old value back to preserve it, since secret values are write-only."
+
+      - name: "Re-check CORS after the fix (if it was applied)"
+        if: steps.cors.outputs.cors_ok == 'false'
+        env:
+          APP_URL: ${{ inputs.app_url }}
+        run: |
+          sleep 5
+          fn_url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/manage-sites"
+          headers=$(curl -sS -i -X OPTIONS "$fn_url" \
+            -H "Origin: ${APP_URL}" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: authorization, content-type")
+          allow_origin=$(echo "$headers" | grep -i '^access-control-allow-origin:' | sed 's/^[^:]*: *//i' | tr -d '\r')
+          echo "Access-Control-Allow-Origin after fix: '$allow_origin'"
+          if [ "$allow_origin" != "$APP_URL" ]; then
+            echo "::error::ALLOWED_APP_ORIGIN still does not include $APP_URL after setting it - Edge Function secrets can take a short time to propagate, or check the Supabase dashboard directly."
+            exit 1
+          fi
+          echo "Confirmed: CORS now allows $APP_URL."
+
+      - name: Update the site (idempotent full-column update, matched by domain)
+        id: update
+        env:
+          DOMAIN: ${{ inputs.domain }}
+          NAME: ${{ inputs.name }}
+          WEBSITE_URL: ${{ inputs.website_url }}
+          GSC_PROPERTY: ${{ inputs.gsc_property }}
+          GA4_PROPERTY_ID: ${{ inputs.ga4_property_id }}
+          BING_SITE_URL: ${{ inputs.bing_site_url }}
+          IS_ACTIVE: ${{ inputs.is_active }}
+        run: |
+          esc() { printf '%s' "$1" | sed "s/'/''/g"; }
+          sql_or_null() { [ -z "$1" ] && echo "null" || echo "'$(esc "$1")'"; }
+
+          domain_v=$(esc "$DOMAIN")
+          name_v=$(esc "$NAME")
+          url_v=$(esc "$WEBSITE_URL")
+          gsc_v=$(sql_or_null "$GSC_PROPERTY")
+          ga4_v=$(sql_or_null "$GA4_PROPERTY_ID")
+          bing_v=$(sql_or_null "$BING_SITE_URL")
+          active_v=$([ "$IS_ACTIVE" = "true" ] && echo "true" || echo "false")
+
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "begin;
+             set local role service_role;
+             with updated as (
+               update public.sites
+               set name = '${name_v}',
+                   website_url = '${url_v}',
+                   gsc_property = ${gsc_v},
+                   ga4_property_id = ${ga4_v},
+                   bing_site_url = ${bing_v},
+                   is_active = ${active_v}
+               where domain = '${domain_v}'
+               returning id, name, domain, gsc_property, ga4_property_id, bing_site_url, is_active
+             )
+             select * from updated;
+             commit;")
+          echo "$result" | tee /tmp/update_result.json
+
+          count=$(echo "$result" | jq 'length')
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly one public.sites row for domain=$DOMAIN, found $count. Nothing was updated - check the domain matches an existing site."
+            exit 1
+          fi
+          site_id=$(echo "$result" | jq -r '.[0].id')
+          echo "site_id=$site_id" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile integration_status.enabled (exactly matching manage-sites' own logic)
+        env:
+          SITE_ID: ${{ steps.update.outputs.site_id }}
+          GSC_PROPERTY: ${{ inputs.gsc_property }}
+          GA4_PROPERTY_ID: ${{ inputs.ga4_property_id }}
+          BING_SITE_URL: ${{ inputs.bing_site_url }}
+        run: |
+          gsc_enabled=$([ -n "$GSC_PROPERTY" ] && echo "true" || echo "false")
+          ga4_enabled=$([ -n "$GA4_PROPERTY_ID" ] && echo "true" || echo "false")
+          bing_enabled=$([ -n "$BING_SITE_URL" ] && echo "true" || echo "false")
+
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "begin;
+             set local role service_role;
+             update public.integration_status set enabled = ${gsc_enabled} where site_id = '${SITE_ID}' and source = 'gsc';
+             update public.integration_status set enabled = ${ga4_enabled} where site_id = '${SITE_ID}' and source = 'ga4';
+             update public.integration_status set enabled = ${bing_enabled} where site_id = '${SITE_ID}' and source = 'bing';
+             commit;"
+
+      - name: Verify the updated record
+        env:
+          SITE_ID: ${{ steps.update.outputs.site_id }}
+        run: |
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.id, s.name, s.domain, s.website_url, s.gsc_property, s.ga4_property_id, s.bing_site_url, s.is_active,
+                    (select jsonb_object_agg(i.source, i.enabled) from public.integration_status i where i.site_id = s.id) as integrations
+             from public.sites s
+             where s.id = '${SITE_ID}';")
+          echo "$result" | tee /tmp/verify.json
+          {
+            echo "### Updated site record"
+            echo '```json'
+            cat /tmp/verify.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          gsc_enabled=$(echo "$result" | jq -r '.[0].integrations.gsc')
+          ga4_enabled=$(echo "$result" | jq -r '.[0].integrations.ga4')
+          bing_enabled=$(echo "$result" | jq -r '.[0].integrations.bing')
+          echo "gsc enabled: $gsc_enabled, ga4 enabled: $ga4_enabled, bing enabled: $bing_enabled"
