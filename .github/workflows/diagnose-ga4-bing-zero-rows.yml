@@ -1,0 +1,100 @@
+name: Diagnose GA4/Bing zero-row syncs
+
+# One-off, read-only diagnostic for "Sync History shows GA4/Bing succeeded
+# with 0 rows, but Overview still says stale / no data on record." Confirms,
+# against the live project, in order:
+#   1. sites: the exact ga4_property_id / bing_site_url actually queried.
+#   2. integration_status: was last_success_at/last_rows_written actually
+#      recorded correctly for the zero-row success (backend correctness).
+#   3. sync_runs: the exact date range requested and rows_fetched/written for
+#      the most recent GA4/Bing runs, plus any error_code/metadata.
+#   4. analytics_daily/search_daily: confirms zero rows genuinely means zero
+#      rows stored (not a display bug hiding real rows).
+#   5. cron.job / cron.job_run_details: scheduled-sync cadence and whether it
+#      has actually fired.
+# Nothing here writes to the database.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+
+      - name: 1. sites - NinjaTickets row (ga4_property_id, bing_site_url)
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select id, name, domain, website_url, gsc_property, ga4_property_id, bing_site_url, is_active
+             from public.sites where domain ilike '%ninjatickets%';"
+
+      - name: 2. integration_status - gsc/ga4/bing rows for that site
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.name, i.source, i.enabled, i.last_status, i.last_attempt_at,
+                    i.last_success_at, i.last_rows_fetched, i.last_rows_written,
+                    i.consecutive_failures, i.last_error_code, i.last_error_message,
+                    i.stale_after_hours, i.updated_at
+             from public.integration_status i
+             join public.sites s on s.id = i.site_id
+             where s.domain ilike '%ninjatickets%'
+             order by i.source;"
+
+      - name: 3. sync_runs - last 5 runs per source for that site
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select r.source, r.trigger_type, r.status, r.started_at, r.finished_at,
+                    r.range_start, r.range_end, r.rows_fetched, r.rows_written,
+                    r.error_code, r.error_message, r.metadata
+             from public.sync_runs r
+             join public.sites s on s.id = r.site_id
+             where s.domain ilike '%ninjatickets%'
+             order by r.started_at desc
+             limit 15;"
+
+      - name: 4. analytics_daily / search_daily row counts for that site
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select 'analytics_daily' as tbl, count(*) as rows, min(metric_date) as earliest, max(metric_date) as latest
+             from public.analytics_daily a
+             join public.sites s on s.id = a.site_id
+             where s.domain ilike '%ninjatickets%'
+             union all
+             select 'search_daily (' || engine || ')', count(*), min(metric_date), max(metric_date)
+             from public.search_daily sd
+             join public.sites s on s.id = sd.site_id
+             where s.domain ilike '%ninjatickets%'
+             group by engine;"
+
+      - name: 5. cron.job - scheduled sync jobs (schedule + active)
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select jobid, jobname, schedule, active
+             from cron.job
+             where jobname like 'site-analytics-sync-%'
+             order by jobname;"
+
+      - name: 6. cron.job_run_details - recent firings
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select j.jobname, d.status, d.return_message, d.start_time, d.end_time
+             from cron.job_run_details d
+             join cron.job j on j.jobid = d.jobid
+             where j.jobname like 'site-analytics-sync-%'
+             order by d.start_time desc
+             limit 20;"
+
+      - name: 7. Today's date (UTC), for date-range sanity-checking
+        run: date -u
