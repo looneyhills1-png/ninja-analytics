@@ -160,7 +160,7 @@ async function callBing(
     record_count: dIsArray ? (dValue as unknown[]).length : null,
     embedded_error_detected: embeddedErrorDetected,
     embedded_error_fields: embeddedErrorFields,
-    sample_row: dIsArray ? (dValue as unknown[])[0] ?? null : null,
+    sample_row: dIsArray ? ((dValue as unknown[])[0] ?? null) : null,
     raw_body_excerpt: bodyText.slice(0, 2000),
     d_full: dIsArray ? (dValue as unknown[]) : null,
   };
@@ -187,7 +187,11 @@ Deno.serve(async (req) => {
     if (!apiKey) {
       return json(
         200,
-        { ok: false, state: "configuration_unverified", reason: "BING_WEBMASTER_API_KEY not set" },
+        {
+          ok: false,
+          state: "configuration_unverified",
+          reason: "BING_WEBMASTER_API_KEY not set",
+        },
         cors,
       );
     }
@@ -215,12 +219,13 @@ Deno.serve(async (req) => {
     const configuredNormalized = configuredBingSiteUrl
       ? normalizeSiteUrl(configuredBingSiteUrl)
       : null;
-    const matchedBingSite = bingSites.find(
-      (s) =>
-        typeof s?.Url === "string" &&
-        configuredNormalized !== null &&
-        normalizeSiteUrl(s.Url) === configuredNormalized,
-    ) ?? null;
+    const matchedBingSite =
+      bingSites.find(
+        (s) =>
+          typeof s?.Url === "string" &&
+          configuredNormalized !== null &&
+          normalizeSiteUrl(s.Url) === configuredNormalized,
+      ) ?? null;
     const exactBingSiteUrl =
       (matchedBingSite?.Url as string | undefined) ?? null;
 
@@ -295,6 +300,10 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, state, siteAccessVerified }, cors);
   } catch (err) {
     const n = normalizeError(err);
-    return json(n.status ?? 500, { ok: false, error: n.code, message: n.message }, cors);
+    return json(
+      n.status ?? 500,
+      { ok: false, error: n.code, message: n.message },
+      cors,
+    );
   }
 });
