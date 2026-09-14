@@ -3,10 +3,12 @@
 # project, via the Management API - never the secret/service_role key.
 #
 # Requires SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_REF in the environment.
-# Prints the key to stdout on success (masked from the workflow log via
-# ::add-mask::) and nothing else. Exits non-zero, with a diagnostic that
-# prints key names/types but never key VALUES, if the response doesn't
-# contain exactly one unambiguous publishable/anon key.
+# Prints ONLY the key to stdout on success - the caller captures it via
+# $(...) and is responsible for masking it (::add-mask:: only works as a
+# step's own direct output, not from inside a captured subprocess). Exits
+# non-zero, with a diagnostic that prints key names/types but never key
+# VALUES, if the response doesn't contain exactly one unambiguous
+# publishable/anon key.
 
 set -euo pipefail
 
@@ -63,5 +65,8 @@ if [ -z "$key" ] || [ "$key" = "null" ]; then
   exit 1
 fi
 
-echo "::add-mask::$key"
+# No ::add-mask:: here: this script's stdout is captured by the caller via
+# $(...), not read directly by the runner, so a workflow command printed here
+# would just become literal text in the captured value instead of being
+# interpreted - masking happens in the caller immediately after capture.
 echo "$key"

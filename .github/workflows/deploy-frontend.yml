@@ -24,6 +24,7 @@ on:
       - "vite.config.*"
       - "tsconfig*.json"
       - ".github/workflows/deploy-frontend.yml"
+      - ".github/workflows/scripts/get_supabase_publishable_key.sh"
 
 concurrency:
   group: deploy-frontend-${{ github.ref }}
