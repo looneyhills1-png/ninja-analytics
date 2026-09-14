@@ -1,0 +1,136 @@
+name: Diagnose Site Create
+
+# One-off diagnostic for "Could not save the site." in the live dashboard.
+# Read-only in net effect: the reproduction insert runs inside a transaction
+# that is always rolled back, never committed. Checks, in order:
+#   1. Is manage-sites actually deployed to the live project at all?
+#   2. Live schema/constraints/triggers/RLS/grants on public.sites and
+#      public.integration_status (never assumed from the migration files -
+#      the live DB may differ from what's on disk).
+#   3. A faithful reproduction of the Edge Function's own insert path: SET
+#      ROLE service_role (what manage-sites' admin client actually runs as),
+#      then the exact NinjaTickets insert, then ROLLBACK.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Reproduce and diagnose
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+
+      - name: Link to the live project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: 1. Is manage-sites actually deployed?
+        run: |
+          supabase functions list --project-ref "$SUPABASE_PROJECT_REF" --output-format json \
+            | tee /tmp/functions_list.json
+          {
+            echo "### Deployed functions"
+            echo '```json'
+            cat /tmp/functions_list.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 2. Live schema - public.sites
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select column_name, data_type, is_nullable, column_default
+             from information_schema.columns
+             where table_schema = 'public' and table_name = 'sites'
+             order by ordinal_position;" | tee /tmp/sites_columns.json
+
+      - name: 3. Live constraints - public.sites
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select conname, contype, pg_get_constraintdef(oid) as def
+             from pg_constraint where conrelid = 'public.sites'::regclass;" \
+            | tee /tmp/sites_constraints.json
+
+      - name: 4. Live triggers - public.sites
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select tgname, tgenabled, pg_get_triggerdef(oid) as def
+             from pg_trigger
+             where tgrelid = 'public.sites'::regclass and not tgisinternal;" \
+            | tee /tmp/sites_triggers.json
+
+      - name: 5. Live RLS status and policies - public.sites
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select relrowsecurity, relforcerowsecurity
+             from pg_class where oid = 'public.sites'::regclass;" \
+            | tee /tmp/sites_rls_status.json
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select policyname, permissive, roles, cmd
+             from pg_policies where schemaname = 'public' and tablename = 'sites';" \
+            | tee /tmp/sites_policies.json
+
+      - name: 6. Live grants - public.sites and public.integration_status
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select table_name, grantee, privilege_type
+             from information_schema.role_table_grants
+             where table_schema = 'public'
+               and table_name in ('sites', 'integration_status')
+               and grantee in ('service_role', 'authenticated', 'anon')
+             order by table_name, grantee, privilege_type;" \
+            | tee /tmp/grants.json
+
+      - name: 7. seed_integration_status function - exists, security definer?
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select proname, prosecdef, pg_get_functiondef(oid) as def
+             from pg_proc
+             where proname = 'seed_integration_status'
+               and pronamespace = 'public'::regnamespace;" \
+            | tee /tmp/seed_fn.json
+
+      - name: 8. Reproduce the exact insert as service_role (rolled back, no side effects)
+        run: |
+          set +e
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "begin;
+             set local role service_role;
+             insert into public.sites (name, domain, website_url, gsc_property, ga4_property_id, bing_site_url, is_active)
+             values ('NinjaTickets', 'ninjatickets.com', 'https://ninjatickets.com', 'sc-domain:ninjatickets.com', null, null, true)
+             returning id, name, domain, is_active;
+             rollback;" | tee /tmp/repro_insert.json
+          echo "Reproduction attempt exit code: ${PIPESTATUS[0]}"
+          {
+            echo "### Reproduction insert (as service_role, rolled back)"
+            echo '```json'
+            cat /tmp/repro_insert.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary of all diagnostics
+        run: |
+          {
+            echo "### All diagnostics"
+            echo "**sites columns:**"; echo '```json'; cat /tmp/sites_columns.json; echo '```'
+            echo "**sites constraints:**"; echo '```json'; cat /tmp/sites_constraints.json; echo '```'
+            echo "**sites triggers:**"; echo '```json'; cat /tmp/sites_triggers.json; echo '```'
+            echo "**sites RLS status:**"; echo '```json'; cat /tmp/sites_rls_status.json; echo '```'
+            echo "**sites policies:**"; echo '```json'; cat /tmp/sites_policies.json; echo '```'
+            echo "**grants:**"; echo '```json'; cat /tmp/grants.json; echo '```'
+            echo "**seed_integration_status:**"; echo '```json'; cat /tmp/seed_fn.json; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
