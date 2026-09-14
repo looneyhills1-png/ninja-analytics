@@ -1,10 +1,10 @@
 name: Deploy Ninja Analytics
 
 # Live-deploys and live-verifies the Supabase side of this project: applies
-# pending migrations, deploys manual-sync + scheduled-uptime, then proves the
-# result by actually calling the new health-check/full-sync functions and
-# checking that GSC/GA4/Bing/uptime rows land - not just that the code
-# compiles or the functions upload.
+# pending migrations, deploys every Edge Function, then proves the result by
+# actually calling the health-check/full-sync functions and checking that
+# GSC/GA4/Bing/uptime rows land - not just that the code compiles or the
+# functions upload.
 #
 # Auth: SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF only (GitHub Actions
 # repository secrets). No SUPABASE_DB_PASSWORD is set or requested - `supabase
@@ -114,13 +114,26 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy manual-sync
-        run: supabase functions deploy manual-sync --project-ref "$SUPABASE_PROJECT_REF" --use-api
+      - name: Deploy all Edge Functions
+        # The full set the README documents under "Deploy the Edge Functions"
+        # (step 5). Only manual-sync and scheduled-uptime were ever deployed
+        # by this workflow - the rest turned out to have never been deployed
+        # to this project at all, which is why manage-sites 404'd instead of
+        # returning a JSON error the dashboard could show ("Could not save
+        # the site."). Deploy the whole set every run, not just the two that
+        # happened to have code changes in the PR that introduced this
+        # workflow - a function with no local changes still needs deploying
+        # if it was never live in the first place.
+        run: |
+          for fn in manage-sites manage-portfolio manual-sync \
+                    scheduled-sync-gsc scheduled-sync-ga4 scheduled-sync-bing \
+                    scheduled-uptime ai-briefing; do
+            echo "::group::Deploy $fn"
+            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api
+            echo "::endgroup::"
+          done
 
-      - name: Deploy scheduled-uptime
-        run: supabase functions deploy scheduled-uptime --project-ref "$SUPABASE_PROJECT_REF" --use-api
-
-      - name: Verify both functions are listed as deployed
+      - name: Verify all functions are listed as deployed
         run: |
           supabase functions list --project-ref "$SUPABASE_PROJECT_REF" --output-format json \
             | tee /tmp/functions_list.json
@@ -130,7 +143,9 @@ jobs:
             cat /tmp/functions_list.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          for fn in manual-sync scheduled-uptime; do
+          for fn in manage-sites manage-portfolio manual-sync \
+                    scheduled-sync-gsc scheduled-sync-ga4 scheduled-sync-bing \
+                    scheduled-uptime ai-briefing; do
             # supabase functions list --output-format json has returned both a
             # bare array and {"functions": [...]} across CLI versions - accept
             # either shape rather than assuming the root itself is the array.
