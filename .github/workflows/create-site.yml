@@ -1,0 +1,130 @@
+name: Create Site
+
+# Adds one tracked site directly against the live project - the same
+# public.sites insert manage-sites' service-role client performs, run via the
+# Management API. Reusable for future sites, not a one-off script; matches
+# the exact SiteInput shape the Sites page form uses (site-input.ts).
+#
+# workflow_dispatch only, never wired to a push/PR trigger - adding a
+# tracked site is always a deliberate, individually-triggered action.
+#
+# Idempotent on domain (public.sites.domain is UNIQUE): if a site for the
+# given domain already exists, this reports that instead of erroring or
+# creating a duplicate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Display name, e.g. NinjaTickets"
+        required: true
+        type: string
+      domain:
+        description: "Bare domain, e.g. ninjatickets.com (no scheme, no path)"
+        required: true
+        type: string
+      website_url:
+        description: "Full URL, e.g. https://ninjatickets.com"
+        required: true
+        type: string
+      gsc_property:
+        description: "GSC property - sc-domain:example.com for a Domain property, or the full URL for a URL-prefix property. Leave blank if not using GSC."
+        required: false
+        type: string
+      ga4_property_id:
+        description: "GA4 numeric property ID (not the G-XXXX measurement ID). Leave blank if not using GA4."
+        required: false
+        type: string
+      bing_site_url:
+        description: "Exact verified Bing Webmaster site URL. Leave blank if not using Bing."
+        required: false
+        type: string
+      is_active:
+        description: "Include this site in scheduled/manual syncs"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  create:
+    name: Insert the site and verify it
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sanity-check required secrets are present
+        run: |
+          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
+          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+
+      - name: Insert the site (idempotent on domain), as service_role
+        id: insert
+        env:
+          NAME: ${{ inputs.name }}
+          DOMAIN: ${{ inputs.domain }}
+          WEBSITE_URL: ${{ inputs.website_url }}
+          GSC_PROPERTY: ${{ inputs.gsc_property }}
+          GA4_PROPERTY_ID: ${{ inputs.ga4_property_id }}
+          BING_SITE_URL: ${{ inputs.bing_site_url }}
+          IS_ACTIVE: ${{ inputs.is_active }}
+        run: |
+          # Standard SQL string-literal escaping (double any embedded single
+          # quotes) on every text input - operator-supplied via
+          # workflow_dispatch, not attacker-supplied, but still not
+          # interpolated raw. Blank optional fields become SQL NULL, not
+          # empty strings, matching what the Sites page form does.
+          esc() { printf '%s' "$1" | sed "s/'/''/g"; }
+          sql_or_null() { [ -z "$1" ] && echo "null" || echo "'$(esc "$1")'"; }
+
+          name_v=$(esc "$NAME")
+          domain_v=$(esc "$DOMAIN")
+          url_v=$(esc "$WEBSITE_URL")
+          gsc_v=$(sql_or_null "$GSC_PROPERTY")
+          ga4_v=$(sql_or_null "$GA4_PROPERTY_ID")
+          bing_v=$(sql_or_null "$BING_SITE_URL")
+          active_v=$([ "$IS_ACTIVE" = "true" ] && echo "true" || echo "false")
+
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "begin;
+             set local role service_role;
+             insert into public.sites (name, domain, website_url, gsc_property, ga4_property_id, bing_site_url, is_active)
+             values ('${name_v}', '${domain_v}', '${url_v}', ${gsc_v}, ${ga4_v}, ${bing_v}, ${active_v})
+             on conflict (domain) do nothing
+             returning id, name, domain, is_active;
+             commit;")
+          echo "$result" | tee /tmp/insert_result.json
+
+          count=$(echo "$result" | jq 'length')
+          echo "inserted=$([ "$count" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the site now exists (whether just created or already present)
+        env:
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          domain_v=$(printf '%s' "$DOMAIN" | sed "s/'/''/g")
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.id, s.name, s.domain, s.website_url, s.gsc_property, s.ga4_property_id, s.bing_site_url, s.is_active,
+                    (select jsonb_object_agg(i.source, i.enabled) from public.integration_status i where i.site_id = s.id) as integrations
+             from public.sites s
+             where s.domain = '${domain_v}';")
+          echo "$result" | tee /tmp/verify.json
+          {
+            echo "### Site record"
+            echo "Newly inserted this run: **${{ steps.insert.outputs.inserted }}**"
+            echo '```json'
+            cat /tmp/verify.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          count=$(echo "$result" | jq 'length')
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly one public.sites row for domain=$DOMAIN after insert, found $count."
+            exit 1
+          fi
+          echo "Confirmed: public.sites contains domain=$DOMAIN."
