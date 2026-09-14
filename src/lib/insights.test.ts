@@ -122,4 +122,75 @@ describe("computeInsights", () => {
     });
     expect(result.sites).toHaveLength(0);
   });
+
+  it("treats a successful zero-row sync as no_data_yet, not a coverage gap", () => {
+    const s1 = site("a1111111-1111-1111-1111-111111111111", "Alpha");
+    const ga4Status = status(s1.id, "ga4"); // last_rows_written: 5 by default
+    ga4Status.last_rows_written = 0;
+    ga4Status.last_rows_fetched = 0;
+    const result = computeInsights({
+      sites: [s1],
+      statuses: [status(s1.id, "gsc"), ga4Status],
+      analytics: [], // nothing landed - matches the zero-row sync
+      search: search(s1.id, [10, 10, 10, 10]),
+      days: 2,
+      now: NOW,
+    });
+    const ga4Row = result.coverage.find((c) => c.source === "ga4");
+    expect(ga4Row?.state).toBe("no_data_yet");
+    expect(ga4Row?.hasGap).toBe(false);
+    expect(result.insights.some((i) => i.id === `cov-${s1.id}-ga4`)).toBe(
+      false,
+    );
+  });
+
+  it("still flags genuinely stale coverage (prior data, nothing recent)", () => {
+    const s1 = site("a1111111-1111-1111-1111-111111111111", "Alpha");
+    const ga4Status = status(s1.id, "ga4");
+    const result = computeInsights({
+      sites: [s1],
+      statuses: [status(s1.id, "gsc"), ga4Status],
+      analytics: [
+        {
+          site_id: s1.id,
+          metric_date: "2026-06-01", // 20 days before NOW → stale
+          active_users: 5,
+          total_users: 5,
+          sessions: 5,
+          screen_page_views: 5,
+          engaged_sessions: 5,
+          updated_at: NOW.toISOString(),
+        },
+      ],
+      search: search(s1.id, [10, 10, 10, 10]),
+      days: 2,
+      now: NOW,
+    });
+    const ga4Row = result.coverage.find((c) => c.source === "ga4");
+    expect(ga4Row?.state).toBe("stale");
+    expect(ga4Row?.hasGap).toBe(true);
+    expect(result.insights.some((i) => i.id === `cov-${s1.id}-ga4`)).toBe(true);
+  });
+
+  it("does not double-report a failing integration as both critical and a coverage gap", () => {
+    const s1 = site("a1111111-1111-1111-1111-111111111111", "Alpha");
+    const bad = status(s1.id, "ga4");
+    bad.consecutive_failures = 3;
+    bad.last_status = "failed";
+    const result = computeInsights({
+      sites: [s1],
+      statuses: [status(s1.id, "gsc"), bad],
+      analytics: [],
+      search: search(s1.id, [10, 10, 10, 10]),
+      days: 2,
+      now: NOW,
+    });
+    const ga4Row = result.coverage.find((c) => c.source === "ga4");
+    expect(ga4Row?.state).toBe("error");
+    expect(
+      result.insights.filter(
+        (i) => i.siteId === s1.id && i.title.includes("GA4"),
+      ).length,
+    ).toBe(1);
+  });
 });

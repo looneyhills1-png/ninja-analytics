@@ -47,9 +47,9 @@ export function CoveragePanel({ coverage }: { coverage: CoverageRow[] }) {
                   <p className="text-xs text-muted-foreground">
                     {privacy.enabled
                       ? "Last data ********"
-                      : c.lastDataDate
-                        ? `Last data ${c.lastDataDate} (${c.staleDays}d ago)`
-                        : "No data on record"}
+                      : c.state === "error"
+                        ? "Sync failing - check integration health"
+                        : `Last data ${c.lastDataDate} (${c.staleDays}d ago)`}
                   </p>
                 </div>
               </li>

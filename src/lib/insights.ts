@@ -1,4 +1,4 @@
-import { computeHealth } from "@/lib/health";
+import { computeHealth, type HealthLevel } from "@/lib/health";
 import {
   percentageChange,
   splitPeriods,
@@ -61,12 +61,35 @@ export interface SiteRow {
   sparkline: number[];
 }
 
+/**
+ * Distinct from HealthLevel (health.ts): coverage is about whether *data*
+ * has actually landed for a source, not just whether the sync itself is
+ * working. A source can be perfectly healthy (synced fine) and still be
+ * "no_data_yet" if the provider legitimately had nothing to return.
+ *   - error: sync is failing (critical health) - actionable now.
+ *   - not_synced: enabled but never attempted yet (pending health) -
+ *     informational, not a failure.
+ *   - no_data_yet: successful sync(s), zero rows so far - connected and
+ *     current, just nothing to show yet. NOT a gap.
+ *   - stale: previously had data, but nothing new within the freshness
+ *     window - a genuine coverage gap.
+ *   - current: successful sync with recent data.
+ */
+export type CoverageState =
+  | "error"
+  | "not_synced"
+  | "no_data_yet"
+  | "stale"
+  | "current";
+
 export interface CoverageRow {
   siteId: string;
   siteName: string;
   source: "gsc" | "ga4" | "bing";
   lastDataDate: string | null;
   staleDays: number | null;
+  state: CoverageState;
+  /** True only for "error" and "stale" - the two states that need attention. */
   hasGap: boolean;
 }
 
@@ -314,6 +337,29 @@ function daysBetween(fromIso: string, now: Date): number {
   return Math.floor((now.getTime() - then) / 86_400_000);
 }
 
+/**
+ * Derive the coverage state from health (does the sync itself work?) plus
+ * data presence (has anything landed?). Health is the source of truth for
+ * "successful" - a healthy/warning-by-time status means at least one real
+ * success has been recorded (health.ts's "critical if no success yet" rule),
+ * so lastDataDate == null at that point means a genuine zero-row success,
+ * not a sync that never ran.
+ */
+function coverageState(
+  healthLevel: HealthLevel,
+  lastDataDate: string | null,
+  staleDays: number | null,
+): CoverageState {
+  if (healthLevel === "critical") return "error";
+  if (healthLevel === "pending" || healthLevel === "disabled") {
+    return "not_synced";
+  }
+  if (lastDataDate == null) return "no_data_yet";
+  // Providers lag ~2 days; flag as stale only beyond 3 days.
+  if ((staleDays ?? 0) > 3) return "stale";
+  return "current";
+}
+
 function computeCoverage(
   activeSites: Site[],
   statusBySite: Map<string, IntegrationStatus[]>,
@@ -334,15 +380,20 @@ function computeCoverage(
         const engine = status.source === "gsc" ? "google" : "bing";
         last = lastDate(search.filter((r) => r.engine === engine));
       }
-      // Providers lag ~2 days; flag as a gap only beyond 3 days.
       const staleDays = last ? daysBetween(last, now) : null;
+      const state = coverageState(
+        computeHealth(status, now).level,
+        last,
+        staleDays,
+      );
       rows.push({
         siteId: site.id,
         siteName: site.name,
         source: status.source,
         lastDataDate: last,
         staleDays,
-        hasGap: last == null || (staleDays ?? 0) > 3,
+        state,
+        hasGap: state === "error" || state === "stale",
       });
     }
   }
@@ -467,16 +518,17 @@ function buildInsights(input: BuildInput): Insight[] {
     }
   }
 
-  // Coverage gaps
+  // Coverage gaps - genuinely stale data only. A sync that is actively
+  // failing is already surfaced by the health loop above (same site+source
+  // would otherwise get two insights); "not_synced"/"no_data_yet" aren't
+  // gaps at all (see CoverageState in insights.ts's computeCoverage).
   for (const c of input.coverage) {
-    if (c.hasGap) {
+    if (c.state === "stale") {
       out.push({
         id: `cov-${c.siteId}-${c.source}`,
         severity: "warning",
         title: `${c.siteName}: ${c.source.toUpperCase()} data is stale`,
-        detail: c.lastDataDate
-          ? `No new ${c.source.toUpperCase()} data since ${c.lastDataDate} (${c.staleDays} days).`
-          : `No ${c.source.toUpperCase()} data on record yet.`,
+        detail: `No new ${c.source.toUpperCase()} data since ${c.lastDataDate} (${c.staleDays} days).`,
         action: "Run a manual sync and verify the property configuration.",
         siteId: c.siteId,
       });
