@@ -45,6 +45,11 @@ jobs:
           bash .github/workflows/scripts/mgmt_sql.sh \
             "$(cat supabase/migrations/0012_bing_diagnostic.sql)"
 
+      - name: Apply migration 0013 (raise invoke_diagnose_bing() timeout to 150s)
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "$(cat supabase/migrations/0013_bing_diagnostic_timeout.sql)"
+
       - name: Deploy diagnose-bing Edge Function
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
@@ -56,18 +61,33 @@ jobs:
 
       - name: Wait for the diagnostic run to land
         run: |
-          deadline=$((SECONDS + 60))
+          deadline=$((SECONDS + 180))
           while [ "$SECONDS" -lt "$deadline" ]; do
-            sleep 5
+            sleep 8
             count=$(bash .github/workflows/scripts/mgmt_sql.sh \
-              "select count(*) as c from public.bing_diagnostic_runs where created_at > now() - interval '5 minutes';" \
+              "select count(*) as c from public.bing_diagnostic_runs where created_at > now() - interval '10 minutes';" \
               | jq '.[0].c')
-            echo "diagnostic runs in last 5 min: $count"
+            echo "diagnostic runs in last 10 min: $count"
             if [ "$count" -ge 1 ]; then
               echo "Diagnostic run landed."
               break
             fi
           done
+
+      - name: Debug - net._http_response for this invocation (visible regardless of outcome)
+        if: always()
+        run: |
+          bash .github/workflows/scripts/mgmt_sql.sh \
+            "select id, status_code, created, left(content, 2000) as content_excerpt
+             from net._http_response
+             order by created desc
+             limit 5;" | tee /tmp/http_response_debug.json
+          {
+            echo "### net._http_response (last 5, most recent invocation attempts)"
+            echo '```json'
+            cat /tmp/http_response_debug.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fetch and print the full diagnostic report
         run: |
