@@ -131,7 +131,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           for fn in manual-sync scheduled-uptime; do
-            if ! jq -e --arg fn "$fn" 'any(.[]; (.slug // .name // "") == $fn)' /tmp/functions_list.json > /dev/null; then
+            if ! jq -e --arg fn "$fn" 'any((.functions // .)[]; (.slug // .name // "") == $fn)' /tmp/functions_list.json > /dev/null; then
               echo "::error::$fn not found in supabase functions list output"
               exit 1
             fi
