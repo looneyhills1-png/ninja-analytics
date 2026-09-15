@@ -5,7 +5,7 @@ import { GA4_METRICS, normalizeGa4Rows, type Ga4Report } from "./normalize.ts";
 import { defaultRange } from "./range.ts";
 import type { SyncAdapter } from "./sync-run.ts";
 
-const DEFAULT_DAYS_BACK = 7;
+const DEFAULT_DAYS_BACK = 30;
 
 /**
  * Google Analytics 4 daily aggregate sync. Upserts one row per date into
