@@ -21,7 +21,7 @@ import { requireAutomationSecret } from "../_shared/auth.ts";
 import { createAdminClient } from "../_shared/database.ts";
 import { normalizeError } from "../_shared/errors.ts";
 
-const BASE = "https://ssl.bing.com/webmaster/api.svc/json";
+const BASE = "https://www.bing.com/webmaster/api.svc/json";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
