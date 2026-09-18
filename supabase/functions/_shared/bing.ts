@@ -17,6 +17,11 @@ const BASES = [
   "https://ssl.bing.com/webmaster/api.svc/json",
 ] as const;
 
+function bingErrorCode(status: number, bodyText: string) {
+  if (/InvalidApiKey/i.test(bodyText)) return "invalid_credentials" as const;
+  return codeForStatus(status);
+}
+
 /**
  * Call a Bing Webmaster endpoint and return its `d` array, having verified
  * the HTTP layer succeeded AND the JSON body is a genuine {"d": [...]}
@@ -44,7 +49,7 @@ async function callBing(
       // is diagnosable from sync history without leaking secrets.
       const excerpt = bodyText.replace(/\s+/g, " ").trim().slice(0, 180);
       lastFailure = new SyncError(
-        codeForStatus(res.status),
+        bingErrorCode(res.status, bodyText),
         `Bing API returned HTTP ${res.status} from ${endpoint}${excerpt ? `: ${excerpt}` : ""}`,
         { status: res.status, retryable: isRetryableStatus(res.status) },
       );
