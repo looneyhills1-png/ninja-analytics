@@ -9,7 +9,13 @@ import {
 } from "./bing-parse.ts";
 import type { SyncAdapter } from "./sync-run.ts";
 
-const BASE = "https://ssl.bing.com/webmaster/api.svc/json";
+// Bing's current JSON/REST examples use www.bing.com. Keep the historical
+// ssl.bing.com host as a compatibility fallback because some API-key accounts
+// are still routed there during Microsoft's 2026 migration.
+const BASES = [
+  "https://www.bing.com/webmaster/api.svc/json",
+  "https://ssl.bing.com/webmaster/api.svc/json",
+] as const;
 
 /**
  * Call a Bing Webmaster endpoint and return its `d` array, having verified
@@ -22,41 +28,67 @@ async function callBing(
   apiKey: string,
   params: Record<string, string> = {},
 ): Promise<unknown[]> {
-  const qs = new URLSearchParams({ apikey: apiKey, ...params });
-  const res = await fetchWithRetry(`${BASE}/${endpoint}?${qs.toString()}`, {
-    headers: { Accept: "application/json" },
-  });
+  let lastFailure: SyncError | null = null;
 
-  if (!res.ok) {
-    // Never echo the URL - it carries the API key.
-    throw new SyncError(
-      codeForStatus(res.status),
-      `Bing API returned HTTP ${res.status} from ${endpoint}`,
-      { status: res.status, retryable: isRetryableStatus(res.status) },
-    );
+  for (const base of BASES) {
+    const qs = new URLSearchParams({ apikey: apiKey, ...params });
+    const res = await fetchWithRetry(`${base}/${endpoint}?${qs.toString()}`, {
+      headers: { Accept: "application/json" },
+    });
+
+    const bodyText = await res.text();
+
+    if (!res.ok) {
+      // Never echo the request URL - it contains the API key. Include only a
+      // short provider response excerpt so a retired endpoint / bad credential
+      // is diagnosable from sync history without leaking secrets.
+      const excerpt = bodyText
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 180);
+      lastFailure = new SyncError(
+        codeForStatus(res.status),
+        `Bing API returned HTTP ${res.status} from ${endpoint}${excerpt ? `: ${excerpt}` : ""}`,
+        { status: res.status, retryable: isRetryableStatus(res.status) },
+      );
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      lastFailure = new SyncError(
+        "provider_error",
+        `Bing API returned unparseable JSON from ${endpoint}`,
+      );
+      continue;
+    }
+
+    if (hasEmbeddedBingError(parsed)) {
+      const topLevel =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? Object.keys(parsed as Record<string, unknown>).join(",")
+          : typeof parsed;
+      const excerpt = bodyText
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 180);
+      lastFailure = new SyncError(
+        "provider_error",
+        `Bing API returned an unexpected response from ${endpoint} (shape: ${topLevel || "empty"})${excerpt ? `: ${excerpt}` : ""}`,
+      );
+      continue;
+    }
+
+    return (parsed as { d: unknown[] }).d;
   }
 
-  const bodyText = await res.text();
-  let parsed: unknown;
-  try {
-    parsed = bodyText ? JSON.parse(bodyText) : null;
-  } catch {
-    throw new SyncError(
-      "provider_error",
-      `Bing API returned unparseable JSON from ${endpoint}`,
-    );
-  }
-
-  if (hasEmbeddedBingError(parsed)) {
-    throw new SyncError(
-      "provider_error",
-      `Bing API returned an unexpected response shape from ${endpoint} despite HTTP 200`,
-    );
-  }
-
-  return (parsed as { d: unknown[] }).d;
+  throw (
+    lastFailure ??
+    new SyncError("provider_error", `Bing API failed for ${endpoint}`)
+  );
 }
-
 /**
  * Bing Webmaster daily traffic sync (single-owner API-key flow). Before
  * trusting a zero-row result as "legitimately no data", this verifies via
