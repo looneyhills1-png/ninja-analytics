@@ -42,10 +42,7 @@ async function callBing(
       // Never echo the request URL - it contains the API key. Include only a
       // short provider response excerpt so a retired endpoint / bad credential
       // is diagnosable from sync history without leaking secrets.
-      const excerpt = bodyText
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 180);
+      const excerpt = bodyText.replace(/\s+/g, " ").trim().slice(0, 180);
       lastFailure = new SyncError(
         codeForStatus(res.status),
         `Bing API returned HTTP ${res.status} from ${endpoint}${excerpt ? `: ${excerpt}` : ""}`,
@@ -70,10 +67,7 @@ async function callBing(
         parsed && typeof parsed === "object" && !Array.isArray(parsed)
           ? Object.keys(parsed as Record<string, unknown>).join(",")
           : typeof parsed;
-      const excerpt = bodyText
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 180);
+      const excerpt = bodyText.replace(/\s+/g, " ").trim().slice(0, 180);
       lastFailure = new SyncError(
         "provider_error",
         `Bing API returned an unexpected response from ${endpoint} (shape: ${topLevel || "empty"})${excerpt ? `: ${excerpt}` : ""}`,
@@ -111,7 +105,10 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
     throw new SyncError("config_missing", "Missing BING_WEBMASTER_API_KEY");
   }
 
-  const bingSites = (await callBing("GetUserSites", apiKey)) as BingSiteRecord[];
+  const bingSites = (await callBing(
+    "GetUserSites",
+    apiKey,
+  )) as BingSiteRecord[];
   const matched = findMatchingBingSite(bingSites, site.bing_site_url);
   if (!matched?.Url) {
     throw new SyncError(
