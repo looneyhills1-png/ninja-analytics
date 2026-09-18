@@ -111,10 +111,7 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
     throw new SyncError("config_missing", "Missing BING_WEBMASTER_API_KEY");
   }
 
-  const bingSites = (await callBing(
-    "GetUserSites",
-    apiKey,
-  )) as BingSiteRecord[];
+  const bingSites = (await callBing("GetUserSites", apiKey)) as BingSiteRecord[];
   const matched = findMatchingBingSite(bingSites, site.bing_site_url);
   if (!matched?.Url) {
     throw new SyncError(
