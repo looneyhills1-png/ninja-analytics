@@ -274,26 +274,46 @@ function MetricsSection({
     Sessions: privacy.maskNumber(r.sessions, `chart:${r.metric_date}:sessions`),
   }));
 
+  // Preserve missing engine/date rows as null rather than coercing them to
+  // zero. Search Console and Bing settle on different schedules; if Bing
+  // has a row for 17 Sep but Google is only settled through 16 Sep, drawing
+  // Google as 0 on the 17th falsely looks like traffic collapsed. Recharts
+  // already renders null as a gap (connectNulls=false).
   const searchByDate = buildSearchChartData(g.current, b.current).map(
-    (row) => ({
-      ...row,
-      "Google clicks": privacy.maskNumber(
-        Number(row["Google clicks"] ?? 0),
-        `chart:${row.date}:google-clicks`,
-      ),
-      "Google impressions": privacy.maskNumber(
-        Number(row["Google impressions"] ?? 0),
-        `chart:${row.date}:google-impressions`,
-      ),
-      "Bing clicks": privacy.maskNumber(
-        Number(row["Bing clicks"] ?? 0),
-        `chart:${row.date}:bing-clicks`,
-      ),
-      "Bing impressions": privacy.maskNumber(
-        Number(row["Bing impressions"] ?? 0),
-        `chart:${row.date}:bing-impressions`,
-      ),
-    }),
+    (row) => {
+      const maskOptional = (key: string, privacyKey: string) =>
+        typeof row[key] === "number"
+          ? privacy.maskNumber(Number(row[key]), privacyKey)
+          : null;
+      return {
+        ...row,
+        "Google clicks": maskOptional(
+          "Google clicks",
+          `chart:${row.date}:google-clicks`,
+        ),
+        "Google impressions": maskOptional(
+          "Google impressions",
+          `chart:${row.date}:google-impressions`,
+        ),
+        "Bing clicks": maskOptional(
+          "Bing clicks",
+          `chart:${row.date}:bing-clicks`,
+        ),
+        "Bing impressions": maskOptional(
+          "Bing impressions",
+          `chart:${row.date}:bing-impressions`,
+        ),
+      };
+    },
+  );
+
+  const latestGoogleDate = google.reduce(
+    (latest, row) => (!latest || row.metric_date > latest ? row.metric_date : latest),
+    "",
+  );
+  const latestBingDate = bing.reduce(
+    (latest, row) => (!latest || row.metric_date > latest ? row.metric_date : latest),
+    "",
   );
 
   return (
@@ -413,6 +433,13 @@ function MetricsSection({
             hint={<MetricDelta change={percentageChange(bImpr, bImprPrev)} />}
           />
         </div>
+        {(latestGoogleDate || latestBingDate) && (
+          <p className="text-xs text-muted-foreground">
+            Latest stored search data: Google {latestGoogleDate || "not available"}
+            {" · "}Bing {latestBingDate || "not available"}. Missing dates are shown
+            as gaps, not zero traffic.
+          </p>
+        )}
         <div className="grid gap-3 lg:grid-cols-2">
           <Card>
             <CardHeader>
