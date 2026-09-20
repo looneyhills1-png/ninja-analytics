@@ -227,9 +227,11 @@ supabase functions deploy scheduled-sync-ga4
 supabase functions deploy scheduled-sync-bing
 supabase functions deploy scheduled-uptime
 supabase functions deploy ai-briefing
+supabase functions deploy site-audit-crawl
+supabase functions deploy common-crawl-sync
 ```
 
-Then confirm all eight appear under **Edge Functions** in the dashboard. After this one step, everything else is back in the browser.
+Then confirm all ten appear under **Edge Functions** in the dashboard. After this one step, everything else is back in the browser.
 
 ### 6. Lock down Supabase Auth and create your admin
 

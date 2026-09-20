@@ -102,5 +102,11 @@ verify_jwt = false
 [functions.diagnose-bing]
 verify_jwt = false
 
+[functions.site-audit-crawl]
+verify_jwt = false
+
+[functions.common-crawl-sync]
+verify_jwt = false
+
 [analytics]
 enabled = false
