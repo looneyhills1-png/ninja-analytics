@@ -304,6 +304,48 @@ Label coverage limitations.
 
 Do not claim exhaustive backlink counts.
 
+### AI Search source coverage
+
+The AI/Search intelligence layer should cover as many major discovery systems as practical, but must distinguish between direct query data and indirect/manual visibility observations.
+
+Explicitly consider:
+- ChatGPT / OpenAI search and answer experiences
+- Google Gemini / Google AI Mode / AI Overviews
+- Microsoft Copilot / Bing AI
+- Anthropic Claude
+- Apple Siri / Apple Intelligence
+- Amazon Alexa
+- Yahoo Search / Yahoo AI features where available
+- DuckDuckGo / DuckAssist
+- Brave Search / Brave Answer with AI
+- Ecosia
+- Dogpile and other metasearch engines
+- Perplexity and other AI answer engines
+- any new major AI/search assistants that become materially relevant
+
+For every source, classify capability as one of:
+1. Direct first-party query data available
+2. Webmaster/analytics visibility data available
+3. Public/free API or lawful observation available
+4. Manual/on-demand visibility test only
+5. No reliable free access
+
+Never imply access to private user prompts or platform-wide query logs when they are not exposed.
+
+The system should normalize all supported sources into common concepts where possible:
+- query/prompt text or query cluster
+- source/platform
+- observed/cited URL
+- site mentioned/cited yes/no
+- competitor mentioned/cited
+- country/device where available
+- first seen / last seen
+- observation count
+- data provenance
+- confidence / exact-vs-observed label
+
+Generated prompt opportunities must be clearly labelled as generated, not observed user prompts.
+
 ### Phase 8 — AI Search visibility
 
 First use data already available:
