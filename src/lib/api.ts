@@ -15,8 +15,15 @@ import {
 } from "@/lib/portfolio-export";
 import type {
   AnalyticsDaily,
+  CommonCrawlPage,
+  CommonCrawlRun,
+  CompetitorDomain,
   IntegrationStatus,
+  ObservedSerpResult,
+  RankDevice,
+  RankSnapshot,
   SearchDaily,
+  SearchEngine,
   SearchPageDaily,
   SearchQueryDaily,
   Site,
@@ -24,6 +31,7 @@ import type {
   SyncSource,
   SyncStatus,
   TrackedQuery,
+  TrackedRankKeyword,
   TriggerType,
   UptimeCheck,
 } from "@/types/database";
@@ -930,4 +938,255 @@ export async function getAiBriefing(
     briefing: result.briefing,
     model: result.model ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: tracked rank keywords, rank history, competitors, Common Crawl
+// ---------------------------------------------------------------------------
+
+export interface TrackedRankKeywordFormValues {
+  siteId: string;
+  query: string;
+  engine: SearchEngine;
+  device: RankDevice;
+  country: string | null;
+  location: string | null;
+}
+
+export async function getTrackedRankKeywords(
+  siteId: string,
+): Promise<TrackedRankKeyword[]> {
+  const { data, error } = await supabase
+    .from("tracked_rank_keywords")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("created_at");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function addTrackedRankKeyword(
+  values: TrackedRankKeywordFormValues,
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    {
+      action: "rank-keyword.add",
+      trackedRankKeyword: {
+        siteId: values.siteId,
+        query: values.query,
+        engine: values.engine,
+        device: values.device,
+        country: values.country,
+        location: values.location,
+      },
+    },
+    "Could not save the tracked keyword.",
+  );
+}
+
+export async function removeTrackedRankKeyword(id: string): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    { action: "rank-keyword.remove", trackedRankKeyword: { id } },
+    "Could not remove the tracked keyword.",
+  );
+}
+
+/** Full observation history for every rank keyword tracked on a site - the
+ * caller (lib/rank-tracking.ts) matches rows back to keywords by dimension,
+ * so this always returns the complete history, never just the latest. */
+export async function getRankSnapshots(
+  siteId: string,
+): Promise<RankSnapshot[]> {
+  return fetchAllPages<RankSnapshot>(() =>
+    supabase
+      .from("rank_snapshots")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("checked_at"),
+  );
+}
+
+export interface RankObservationInput {
+  trackedRankKeywordId: string;
+  rankingUrl: string | null;
+  observedRank: number | null;
+}
+
+/** A single manual rank check for one tracked keyword - always inserts a new
+ * row, never updates or overwrites a prior observation. */
+export async function recordRankObservation(
+  input: RankObservationInput,
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    { action: "rank-observation.record", observation: input },
+    "Could not record the observation.",
+  );
+}
+
+export interface SerpObservationResultInput {
+  domain: string;
+  url: string | null;
+  rankObserved: number | null;
+  isOwnSite: boolean;
+}
+
+/** A full observed-SERP entry (every domain seen for one query, not just our
+ * own) - the zero-cost source for both our own observed rank and the
+ * Observed Keyword Gap competitor data. */
+export async function recordSerpObservation(
+  trackedRankKeywordId: string,
+  results: SerpObservationResultInput[],
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    {
+      action: "serp-observation.record",
+      observation: { trackedRankKeywordId, results },
+    },
+    "Could not record the SERP observation.",
+  );
+}
+
+/** Raw per-engine query rows for the average-position cross-reference in
+ * lib/rank-tracking.ts (computeEngineAveragePositions) - kept separate from
+ * getKeywordOpportunities, which only exposes Google's own position. */
+export async function getEngineQueryPositions(
+  siteId: string,
+  days: number,
+): Promise<
+  {
+    engine: SearchEngine;
+    query: string;
+    impressions: number;
+    average_position: number | null;
+  }[]
+> {
+  const since = format(subDays(new Date(), days), "yyyy-MM-dd");
+  return fetchAllPages(() =>
+    supabase
+      .from("search_query_daily")
+      .select("engine, query, impressions, average_position")
+      .eq("site_id", siteId)
+      .gte("metric_date", since)
+      .order("metric_date"),
+  );
+}
+
+// Competitors -------------------------------------------------------------
+export async function getCompetitorDomains(
+  siteId: string,
+): Promise<CompetitorDomain[]> {
+  const { data, error } = await supabase
+    .from("competitor_domains")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("created_at");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface CompetitorDomainFormValues {
+  siteId: string;
+  domain: string;
+  label: string | null;
+  note: string | null;
+  autoDiscovered?: boolean;
+}
+
+export async function addCompetitorDomain(
+  values: CompetitorDomainFormValues,
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    {
+      action: "competitor-domain.add",
+      competitorDomain: {
+        siteId: values.siteId,
+        domain: values.domain,
+        label: values.label,
+        note: values.note,
+        autoDiscovered: values.autoDiscovered ?? false,
+      },
+    },
+    "Could not save the competitor domain.",
+  );
+}
+
+export async function removeCompetitorDomain(
+  siteId: string,
+  domain: string,
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    {
+      action: "competitor-domain.remove",
+      competitorDomain: { siteId, domain },
+    },
+    "Could not remove the competitor domain.",
+  );
+}
+
+/** Every SERP observation recorded for a site - the raw material for
+ * competitor appearance counts, shared/competitor-only keywords, and the
+ * Observed Keyword Gap (all computed client-side in lib/competitor-insights.ts). */
+export async function getObservedSerpResults(
+  siteId: string,
+): Promise<ObservedSerpResult[]> {
+  return fetchAllPages<ObservedSerpResult>(() =>
+    supabase
+      .from("observed_serp_results")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("observed_at"),
+  );
+}
+
+// Common Crawl --------------------------------------------------------------
+export async function getCommonCrawlPages(
+  domain: string,
+): Promise<CommonCrawlPage[]> {
+  return fetchAllPages<CommonCrawlPage>(() =>
+    supabase
+      .from("common_crawl_pages")
+      .select("*")
+      .eq("domain", domain)
+      .order("last_seen", { ascending: false }),
+  );
+}
+
+export async function getCommonCrawlRuns(
+  domain: string,
+): Promise<CommonCrawlRun[]> {
+  const { data, error } = await supabase
+    .from("common_crawl_runs")
+    .select("*")
+    .eq("domain", domain)
+    .order("started_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface CommonCrawlSyncResult {
+  ok: boolean;
+  domain: string;
+  crawlId: string;
+  pagesFound: number;
+  pagesNew: number;
+  pagesDisappeared: number;
+  titlesChecked: number;
+}
+
+/** On-demand only - never scheduled. See supabase/functions/common-crawl-sync. */
+export async function triggerCommonCrawlSync(
+  domain: string,
+): Promise<CommonCrawlSyncResult> {
+  return invokeFunction<CommonCrawlSyncResult>(
+    "common-crawl-sync",
+    { domain },
+    "Could not sync Common Crawl data for this domain.",
+  );
 }

@@ -477,6 +477,103 @@ export interface Database {
           },
         ];
       };
+      tracked_rank_keywords: {
+        Row: {
+          id: string;
+          site_id: string;
+          query: string;
+          engine: SearchEngine;
+          device: RankDevice;
+          country: string | null;
+          location: string | null;
+          country_key: string;
+          location_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          query: string;
+          engine?: SearchEngine;
+          device?: RankDevice;
+          country?: string | null;
+          location?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["tracked_rank_keywords"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "tracked_rank_keywords_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      common_crawl_runs: {
+        Row: {
+          id: string;
+          domain: string;
+          crawl_id: string | null;
+          started_at: string;
+          finished_at: string | null;
+          status: "running" | "success" | "failed";
+          pages_found: number;
+          pages_new: number;
+          pages_disappeared: number;
+          error_message: string | null;
+        };
+        Insert: {
+          id?: string;
+          domain: string;
+          crawl_id?: string | null;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: "running" | "success" | "failed";
+          pages_found?: number;
+          pages_new?: number;
+          pages_disappeared?: number;
+          error_message?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["common_crawl_runs"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      common_crawl_pages: {
+        Row: {
+          id: string;
+          domain: string;
+          url: string;
+          first_seen: string;
+          last_seen: string;
+          cdx_status_code: number | null;
+          last_status_code: number | null;
+          mime_type: string | null;
+          title: string | null;
+          is_active: boolean;
+          last_checked_at: string;
+        };
+        Insert: {
+          id?: string;
+          domain: string;
+          url: string;
+          first_seen: string;
+          last_seen: string;
+          cdx_status_code?: number | null;
+          last_status_code?: number | null;
+          mime_type?: string | null;
+          title?: string | null;
+          is_active?: boolean;
+          last_checked_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["common_crawl_pages"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: {
@@ -521,3 +618,6 @@ export type SyncRun = Tables<"sync_runs">;
 export type IntegrationStatus = Tables<"integration_status">;
 export type TrackedQuery = Tables<"tracked_queries">;
 export type UptimeCheck = Tables<"uptime_checks">;
+export type TrackedRankKeyword = Tables<"tracked_rank_keywords">;
+export type CommonCrawlRun = Tables<"common_crawl_runs">;
+export type CommonCrawlPage = Tables<"common_crawl_pages">;

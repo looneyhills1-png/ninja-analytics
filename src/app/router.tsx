@@ -78,6 +78,31 @@ const KeywordsClustersPage = lazy(() =>
     default: m.KeywordsClustersPage,
   })),
 );
+const CompetitorsLayout = lazy(() =>
+  import("@/features/competitors/CompetitorsLayout").then((m) => ({
+    default: m.CompetitorsLayout,
+  })),
+);
+const CompetitorsOverviewPage = lazy(() =>
+  import("@/features/competitors/CompetitorsOverviewPage").then((m) => ({
+    default: m.CompetitorsOverviewPage,
+  })),
+);
+const CompetitorsHistoricalPagesPage = lazy(() =>
+  import("@/features/competitors/CompetitorsHistoricalPagesPage").then((m) => ({
+    default: m.CompetitorsHistoricalPagesPage,
+  })),
+);
+const CompetitorsNewLostPagesPage = lazy(() =>
+  import("@/features/competitors/CompetitorsNewLostPagesPage").then((m) => ({
+    default: m.CompetitorsNewLostPagesPage,
+  })),
+);
+const CompetitorsLinksPage = lazy(() =>
+  import("@/features/competitors/CompetitorsLinksPage").then((m) => ({
+    default: m.CompetitorsLinksPage,
+  })),
+);
 const DemoLayout = lazy(() =>
   import("@/features/demo/DemoPages").then((m) => ({
     default: m.DemoLayout,
@@ -185,6 +210,22 @@ export const router = createBrowserRouter(
                 { path: "queries", element: <KeywordsQueriesPage /> },
                 { path: "pages", element: <KeywordsPagesPage /> },
                 { path: "clusters", element: <KeywordsClustersPage /> },
+              ],
+            },
+            {
+              path: "/competitors",
+              element: <CompetitorsLayout />,
+              children: [
+                { index: true, element: <CompetitorsOverviewPage /> },
+                {
+                  path: "historical-pages",
+                  element: <CompetitorsHistoricalPagesPage />,
+                },
+                {
+                  path: "new-lost-pages",
+                  element: <CompetitorsNewLostPagesPage />,
+                },
+                { path: "links", element: <CompetitorsLinksPage /> },
               ],
             },
             { path: "/sync-runs", element: <SyncRunsPage /> },

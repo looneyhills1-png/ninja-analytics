@@ -32,3 +32,300 @@ export function parseTrackedQueryInput(
 
   return { ok: true, value: { siteId: b.siteId, query } };
 }
+
+// Rank tracking (Phase 2) -----------------------------------------------------
+
+export const MAX_TRACKED_RANK_KEYWORDS_PER_SITE = 30;
+export const MAX_COMPETITOR_DOMAINS_PER_SITE = 25;
+export const MAX_SERP_RESULTS_PER_OBSERVATION = 30;
+
+export type RankEngine = "google" | "bing";
+export type RankDevice = "desktop" | "mobile";
+
+const RANK_ENGINES: RankEngine[] = ["google", "bing"];
+const RANK_DEVICES: RankDevice[] = ["desktop", "mobile"];
+
+export interface TrackedRankKeywordInput {
+  siteId: string;
+  query: string;
+  engine: RankEngine;
+  device: RankDevice;
+  country: string | null;
+  location: string | null;
+}
+
+function optionalTrimmedString(
+  value: unknown,
+  maxLen: number,
+): ParseResult<string | null> {
+  if (value == null || value === "") return { ok: true, value: null };
+  if (typeof value !== "string") {
+    return { ok: false, error: "Expected a string or null" };
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return { ok: true, value: null };
+  if (trimmed.length > maxLen) {
+    return { ok: false, error: `Must be at most ${maxLen} characters` };
+  }
+  return { ok: true, value: trimmed };
+}
+
+export function parseTrackedRankKeywordInput(
+  body: unknown,
+): ParseResult<TrackedRankKeywordInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+
+  if (!isUuid(b.siteId)) {
+    return { ok: false, error: "siteId must be a valid UUID" };
+  }
+  const query = typeof b.query === "string" ? b.query.trim() : "";
+  if (query.length < 1 || query.length > 200) {
+    return { ok: false, error: "query must be 1-200 characters" };
+  }
+  const engine = b.engine ?? "google";
+  if (
+    typeof engine !== "string" ||
+    !RANK_ENGINES.includes(engine as RankEngine)
+  ) {
+    return { ok: false, error: "engine must be google or bing" };
+  }
+  const device = b.device ?? "desktop";
+  if (
+    typeof device !== "string" ||
+    !RANK_DEVICES.includes(device as RankDevice)
+  ) {
+    return { ok: false, error: "device must be desktop or mobile" };
+  }
+  const country = optionalTrimmedString(b.country, 10);
+  if (!country.ok) return { ok: false, error: `country: ${country.error}` };
+  const location = optionalTrimmedString(b.location, 120);
+  if (!location.ok) return { ok: false, error: `location: ${location.error}` };
+
+  return {
+    ok: true,
+    value: {
+      siteId: b.siteId,
+      query,
+      engine: engine as RankEngine,
+      device: device as RankDevice,
+      country: country.value,
+      location: location.value,
+    },
+  };
+}
+
+export interface RemoveTrackedRankKeywordInput {
+  id: string;
+}
+
+export function parseRemoveTrackedRankKeywordInput(
+  body: unknown,
+): ParseResult<RemoveTrackedRankKeywordInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.id)) return { ok: false, error: "id must be a valid UUID" };
+  return { ok: true, value: { id: b.id } };
+}
+
+export interface RankObservationInput {
+  trackedRankKeywordId: string;
+  rankingUrl: string | null;
+  observedRank: number | null;
+}
+
+function parseObservedRank(value: unknown): ParseResult<number | null> {
+  if (value == null) return { ok: true, value: null };
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    return {
+      ok: false,
+      error: "observedRank must be a positive integer, or null if not found",
+    };
+  }
+  if (value > 200) {
+    return { ok: false, error: "observedRank must be 200 or less" };
+  }
+  return { ok: true, value };
+}
+
+function parseOptionalUrl(value: unknown): ParseResult<string | null> {
+  if (value == null || value === "") return { ok: true, value: null };
+  if (typeof value !== "string" || value.length > 2000) {
+    return { ok: false, error: "Must be a URL string of at most 2000 chars" };
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return { ok: false, error: "URL must be http(s)" };
+    }
+  } catch {
+    return { ok: false, error: "Must be a valid URL" };
+  }
+  return { ok: true, value };
+}
+
+export function parseRankObservationInput(
+  body: unknown,
+): ParseResult<RankObservationInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.trackedRankKeywordId)) {
+    return { ok: false, error: "trackedRankKeywordId must be a valid UUID" };
+  }
+  const rankingUrl = parseOptionalUrl(b.rankingUrl);
+  if (!rankingUrl.ok)
+    return { ok: false, error: `rankingUrl: ${rankingUrl.error}` };
+  const observedRank = parseObservedRank(b.observedRank);
+  if (!observedRank.ok) return observedRank;
+
+  return {
+    ok: true,
+    value: {
+      trackedRankKeywordId: b.trackedRankKeywordId,
+      rankingUrl: rankingUrl.value,
+      observedRank: observedRank.value,
+    },
+  };
+}
+
+export interface SerpObservationResultInput {
+  domain: string;
+  url: string | null;
+  rankObserved: number | null;
+  isOwnSite: boolean;
+}
+
+export interface SerpObservationInput {
+  trackedRankKeywordId: string;
+  results: SerpObservationResultInput[];
+}
+
+function normalizeDomain(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/^www\./, "");
+}
+
+export function parseSerpObservationInput(
+  body: unknown,
+): ParseResult<SerpObservationInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.trackedRankKeywordId)) {
+    return { ok: false, error: "trackedRankKeywordId must be a valid UUID" };
+  }
+  if (!Array.isArray(b.results) || b.results.length === 0) {
+    return { ok: false, error: "results must be a non-empty array" };
+  }
+  if (b.results.length > MAX_SERP_RESULTS_PER_OBSERVATION) {
+    return {
+      ok: false,
+      error: `results may not exceed ${MAX_SERP_RESULTS_PER_OBSERVATION} rows`,
+    };
+  }
+
+  const results: SerpObservationResultInput[] = [];
+  for (const raw of b.results) {
+    if (typeof raw !== "object" || raw === null) {
+      return { ok: false, error: "Each result must be an object" };
+    }
+    const r = raw as Record<string, unknown>;
+    if (typeof r.domain !== "string" || r.domain.trim().length === 0) {
+      return { ok: false, error: "Each result needs a domain" };
+    }
+    const domain = normalizeDomain(r.domain);
+    if (domain.length > 253) {
+      return { ok: false, error: "domain is too long" };
+    }
+    const url = parseOptionalUrl(r.url);
+    if (!url.ok) return { ok: false, error: `url: ${url.error}` };
+    const rankObserved = parseObservedRank(r.rankObserved);
+    if (!rankObserved.ok) return rankObserved;
+    results.push({
+      domain,
+      url: url.value,
+      rankObserved: rankObserved.value,
+      isOwnSite: r.isOwnSite === true,
+    });
+  }
+
+  return {
+    ok: true,
+    value: { trackedRankKeywordId: b.trackedRankKeywordId, results },
+  };
+}
+
+export interface CompetitorDomainInput {
+  siteId: string;
+  domain: string;
+  label: string | null;
+  note: string | null;
+  autoDiscovered: boolean;
+}
+
+export function parseCompetitorDomainInput(
+  body: unknown,
+): ParseResult<CompetitorDomainInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.siteId)) {
+    return { ok: false, error: "siteId must be a valid UUID" };
+  }
+  if (typeof b.domain !== "string" || b.domain.trim().length === 0) {
+    return { ok: false, error: "domain is required" };
+  }
+  const domain = normalizeDomain(b.domain);
+  if (domain.length > 253) {
+    return { ok: false, error: "domain is too long" };
+  }
+  const label = optionalTrimmedString(b.label, 80);
+  if (!label.ok) return { ok: false, error: `label: ${label.error}` };
+  const note = optionalTrimmedString(b.note, 300);
+  if (!note.ok) return { ok: false, error: `note: ${note.error}` };
+
+  return {
+    ok: true,
+    value: {
+      siteId: b.siteId,
+      domain,
+      label: label.value,
+      note: note.value,
+      autoDiscovered: b.autoDiscovered === true,
+    },
+  };
+}
+
+export interface RemoveCompetitorDomainInput {
+  siteId: string;
+  domain: string;
+}
+
+export function parseRemoveCompetitorDomainInput(
+  body: unknown,
+): ParseResult<RemoveCompetitorDomainInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.siteId)) {
+    return { ok: false, error: "siteId must be a valid UUID" };
+  }
+  if (typeof b.domain !== "string" || b.domain.trim().length === 0) {
+    return { ok: false, error: "domain is required" };
+  }
+  return {
+    ok: true,
+    value: { siteId: b.siteId, domain: normalizeDomain(b.domain) },
+  };
+}

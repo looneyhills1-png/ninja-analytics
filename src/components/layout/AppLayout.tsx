@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Globe,
   Search,
+  Swords,
   History,
   Database,
   ShieldCheck,
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/sites", label: "Sites", icon: Globe, end: false },
   { to: "/keywords", label: "Keywords", icon: Search, end: false },
+  { to: "/competitors", label: "Competitors", icon: Swords, end: false },
   { to: "/sync-runs", label: "Sync history", icon: History, end: false },
   { to: "/system", label: "System", icon: Database, end: false },
   {

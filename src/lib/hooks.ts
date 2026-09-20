@@ -5,15 +5,29 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  addCompetitorDomain,
   addTrackedQuery,
+  addTrackedRankKeyword,
   getAiBriefing,
+  getCommonCrawlPages,
+  getCommonCrawlRuns,
+  getCompetitorDomains,
+  getEngineQueryPositions,
   getIntegrationStatuses,
   getKeywordOpportunities,
+  getObservedSerpResults,
   getPortfolioPageDaily,
+  getRankSnapshots,
   getSitePageDaily,
   getTrackedQueryHistory,
+  getTrackedRankKeywords,
   getUptimeSummaries,
+  recordRankObservation,
+  recordSerpObservation,
+  removeCompetitorDomain,
   removeTrackedQuery,
+  removeTrackedRankKeyword,
+  triggerCommonCrawlSync,
   getSite,
   getSiteMetrics,
   getSites,
@@ -25,8 +39,12 @@ import {
   invokeManualSync,
   saveSite,
   deleteSite,
+  type CompetitorDomainFormValues,
   type ManualSource,
+  type RankObservationInput,
+  type SerpObservationResultInput,
   type SyncRunFilters,
+  type TrackedRankKeywordFormValues,
 } from "@/lib/api";
 
 // Stable query keys (brief §21) so manual sync (Phase 5) can invalidate
@@ -51,6 +69,17 @@ export const queryKeys = {
   portfolioPageDaily: (days: number) => ["portfolio-page-daily", days] as const,
   keywordOpportunities: (siteId: string, days: number) =>
     ["keyword-opportunities", siteId, days] as const,
+  trackedRankKeywords: (siteId: string) =>
+    ["tracked-rank-keywords", siteId] as const,
+  rankSnapshots: (siteId: string) => ["rank-snapshots", siteId] as const,
+  competitorDomains: (siteId: string) =>
+    ["competitor-domains", siteId] as const,
+  observedSerpResults: (siteId: string) =>
+    ["observed-serp-results", siteId] as const,
+  commonCrawlPages: (domain: string) => ["common-crawl-pages", domain] as const,
+  commonCrawlRuns: (domain: string) => ["common-crawl-runs", domain] as const,
+  engineQueryPositions: (siteId: string, days: number) =>
+    ["engine-query-positions", siteId, days] as const,
 };
 
 export function useSites() {
@@ -230,5 +259,145 @@ export function useAiBriefing() {
   return useMutation({
     mutationFn: (args: { days: number; summary: Record<string, unknown> }) =>
       getAiBriefing(args.days, args.summary),
+  });
+}
+
+// Phase 2: tracked rank keywords, rank history, competitors, Common Crawl ----
+
+export function useTrackedRankKeywords(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.trackedRankKeywords(siteId),
+    queryFn: () => getTrackedRankKeywords(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useAddTrackedRankKeyword(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (values: TrackedRankKeywordFormValues) =>
+      addTrackedRankKeyword(values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.trackedRankKeywords(siteId) });
+    },
+  });
+}
+
+export function useRemoveTrackedRankKeyword(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => removeTrackedRankKeyword(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.trackedRankKeywords(siteId) });
+      qc.invalidateQueries({ queryKey: queryKeys.rankSnapshots(siteId) });
+    },
+  });
+}
+
+/** The complete observation history for a site's tracked rank keywords -
+ * never just the latest row, so lib/rank-tracking.ts can compute best/worst/
+ * first-seen/movement from the full series. */
+export function useRankSnapshots(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.rankSnapshots(siteId),
+    queryFn: () => getRankSnapshots(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useRecordRankObservation(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RankObservationInput) => recordRankObservation(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.rankSnapshots(siteId) });
+    },
+  });
+}
+
+export function useRecordSerpObservation(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      trackedRankKeywordId: string;
+      results: SerpObservationResultInput[];
+    }) => recordSerpObservation(args.trackedRankKeywordId, args.results),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.rankSnapshots(siteId) });
+      qc.invalidateQueries({ queryKey: queryKeys.observedSerpResults(siteId) });
+    },
+  });
+}
+
+export function useCompetitorDomains(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.competitorDomains(siteId),
+    queryFn: () => getCompetitorDomains(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useAddCompetitorDomain(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (values: CompetitorDomainFormValues) =>
+      addCompetitorDomain(values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.competitorDomains(siteId) });
+    },
+  });
+}
+
+export function useRemoveCompetitorDomain(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (domain: string) => removeCompetitorDomain(siteId, domain),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.competitorDomains(siteId) });
+    },
+  });
+}
+
+export function useObservedSerpResults(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.observedSerpResults(siteId),
+    queryFn: () => getObservedSerpResults(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useCommonCrawlPages(domain: string) {
+  return useQuery({
+    queryKey: queryKeys.commonCrawlPages(domain),
+    queryFn: () => getCommonCrawlPages(domain),
+    enabled: !!domain,
+  });
+}
+
+export function useCommonCrawlRuns(domain: string) {
+  return useQuery({
+    queryKey: queryKeys.commonCrawlRuns(domain),
+    queryFn: () => getCommonCrawlRuns(domain),
+    enabled: !!domain,
+  });
+}
+
+export function useEngineQueryPositions(siteId: string, days: number) {
+  return useQuery({
+    queryKey: queryKeys.engineQueryPositions(siteId, days),
+    queryFn: () => getEngineQueryPositions(siteId, days),
+    enabled: !!siteId,
+  });
+}
+
+/** On-demand only - never scheduled (CLAUDE.md: no high-frequency jobs). */
+export function useTriggerCommonCrawlSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (domain: string) => triggerCommonCrawlSync(domain),
+    onSuccess: (_result, domain) => {
+      qc.invalidateQueries({ queryKey: queryKeys.commonCrawlPages(domain) });
+      qc.invalidateQueries({ queryKey: queryKeys.commonCrawlRuns(domain) });
+    },
   });
 }
