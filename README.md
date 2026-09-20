@@ -166,24 +166,27 @@ Afterwards, open **Integrations → Cron → Jobs**: five jobs (three daily sync
 
 ### 2. Configure Google Cloud and mint a refresh token
 
-This produces three of your Edge Function secrets: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (from the OAuth client in the [Google Cloud Console](https://console.cloud.google.com)), and `GOOGLE_REFRESH_TOKEN` (from Google's web-based OAuth Playground). It's entirely browser-based - no terminal.
+This produces three of your Edge Function secrets: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (from the OAuth client in the [Google Cloud Console](https://console.cloud.google.com)), and `GOOGLE_REFRESH_TOKEN` (minted by the repo's own `npm run oauth:google` helper, [`scripts/google-oauth.ts`](scripts/google-oauth.ts)).
 
 1. **Create or select a project.** One project holds both APIs and the OAuth client.
 2. **Enable the two APIs.** In **APIs & Services → Library**, enable **Google Search Console API** and **Google Analytics Data API**. You can confirm both afterwards under **APIs & Services → Enabled APIs & services**, which also shows each API's request, error, and latency metrics.
-3. **Configure the OAuth consent screen** (**APIs & Services → OAuth consent screen**, surfaced under "Google Auth Platform" in the newer console). The app requests only two **read-only** scopes - `.../auth/webmasters.readonly` (Search Console) and `.../auth/analytics.readonly` (GA4). While the app is in **Testing**, add the Google account that owns the sites as a **test user**, or authorization is blocked.
-4. **Create the OAuth client.** In **APIs & Services → Credentials → Create credentials → OAuth client ID**, pick application type **Web application** and name it anything (e.g. `Site Analytics`). Copy its **Client ID** and **Client secret** - these are `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-5. **Add the Playground redirect URI.** On the OAuth client you just created, add `https://developers.google.com/oauthplayground` to its **Authorized redirect URIs** (Google requires an exact match) and save.
+3. **Configure the OAuth consent screen** (**APIs & Services → OAuth consent screen**, surfaced under "Google Auth Platform" in the newer console). The app requests only two **read-only** scopes - `.../auth/webmasters.readonly` (Search Console) and `.../auth/analytics.readonly` (GA4). While the app is in **Testing**, add the Google account that owns the sites as a **test user**, or authorization is blocked - and see the note at the end of this section about what Testing mode means for how often you'll be back here.
+4. **Create the OAuth client.** In **APIs & Services → Credentials → Create credentials → OAuth client ID**, pick application type **Web application** (not Desktop/iOS/Android - this flow authenticates with a client secret, which those types don't use the same way) and name it anything (e.g. `Site Analytics`). Copy its **Client ID** and **Client secret** - these are `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+5. **Add the helper script's redirect URI.** On the OAuth client you just created, add `http://localhost:5179/oauth2callback` to its **Authorized redirect URIs** and save (Google requires an exact match, port included). This is the local helper's own callback address - it's separate from, and doesn't replace, an OAuth Playground redirect URI if you also add one for manual/fallback use.
 
-Now mint the refresh token in the browser with the [Google OAuth 2.0 Playground](https://developers.google.com/oauthplayground):
+Now mint the refresh token with the repo's own helper - no browser-based Playground fiddling needed:
 
-1. Click the **gear icon** (⚙, top-right) → tick **Use your own OAuth credentials**, and paste your **Client ID** and **Client secret**. Make sure **Access type** is **Offline** so Google returns a refresh token.
-2. In the left **Step 1** panel, skip the API list and paste both scopes into **"Input your own scopes,"** separated by a space:
-   - `https://www.googleapis.com/auth/webmasters.readonly`
-   - `https://www.googleapis.com/auth/analytics.readonly`
-3. Click **Authorize APIs** and sign in with the Google account that can read all intended Search Console and GA4 properties. Approve access (accept the "unverified app" notice if your consent screen is still in Testing).
-4. Back in the Playground, under **Step 2**, click **Exchange authorization code for tokens** and copy the **Refresh token** - that value is `GOOGLE_REFRESH_TOKEN`.
+```
+GOOGLE_CLIENT_ID=your-client-id GOOGLE_CLIENT_SECRET=your-client-secret npm run oauth:google
+```
 
-Store the refresh token immediately in a password manager or directly as the Supabase Edge Function secret; never paste it into source code, an issue, or a commit. (If no refresh token comes back, remove the app under your Google Account's **Third-party access**, then redo step 3 so Google issues a fresh one.)
+It prints an authorization URL - open it, sign in with the Google account that can read all intended Search Console and GA4 properties, and approve access (accept the "unverified app" notice if your consent screen is still in Testing). The script then prints the refresh token once in the terminal; that value is `GOOGLE_REFRESH_TOKEN`. Store it immediately in a password manager or directly as the Supabase Edge Function secret; never paste it into source code, an issue, or a commit.
+
+If it fails instead, the script's own error output tells you which of two things went wrong - `unauthorized_client`/`redirect_uri_mismatch` means step 5 above wasn't done (or doesn't match exactly); `invalid_client` means the client ID/secret pair is stale (re-copy both from Credentials). If Google never returns a refresh token at all, remove the app under your Google Account's **Third-party access**, then re-run so Google issues a fresh one (the script already requests `prompt=consent` for this reason).
+
+*(Prefer the browser instead? The [Google OAuth 2.0 Playground](https://developers.google.com/oauthplayground) works the same way: gear icon → your own OAuth credentials → paste both scopes into "Input your own scopes" → Authorize → Exchange authorization code for tokens. It needs its own redirect URI, `https://developers.google.com/oauthplayground`, added to the same OAuth client - only useful as a fallback, since it needs the extra manual steps above and doesn't print the same clear error diagnosis this repo's helper does.)*
+
+**Renewing a dead refresh token later:** if GA4/GSC syncs start failing in production with `auth_error` and Sync History shows `invalid_grant - Token has been expired or revoked.`, the refresh token itself has died - either it was revoked, or (very commonly, while the consent screen is still in **Testing**) it hit Google's 7-day auto-expiry for test-user tokens. Fix: re-run the exact command above and paste the new token into `GOOGLE_REFRESH_TOKEN` - nothing else needs to change, since `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and the redirect URI registration are unaffected by this. To stop it recurring, publish or verify the OAuth consent screen (**APIs & Services → OAuth consent screen → Publish app**) so tokens stop expiring on that 7-day cycle.
 
 ### 3. Create a Bing API key
 

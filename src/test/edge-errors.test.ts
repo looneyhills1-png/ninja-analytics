@@ -66,4 +66,23 @@ describe("normalizeError", () => {
     const n = normalizeError(new Error("Bearer leaked.token.value here"));
     expect(n.message).not.toContain("leaked.token.value");
   });
+
+  it("carries a provider's own error code through separately from ours", () => {
+    // e.g. Google's OAuth invalid_grant vs unauthorized_client - both map to
+    // our single auth_error, but callers (alerts, dashboards) need to tell
+    // "dead refresh token" apart from "bad client" without parsing text.
+    const n = normalizeError(
+      new SyncError("auth_error", "Google token refresh failed (HTTP 400)", {
+        status: 401,
+        providerErrorCode: "invalid_grant",
+      }),
+    );
+    expect(n.code).toBe("auth_error");
+    expect(n.providerErrorCode).toBe("invalid_grant");
+  });
+
+  it("leaves providerErrorCode undefined when the thrower didn't set one", () => {
+    const n = normalizeError(new SyncError("timeout", "slow"));
+    expect(n.providerErrorCode).toBeUndefined();
+  });
 });

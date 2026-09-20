@@ -19,17 +19,30 @@ export class SyncError extends Error {
   code: ErrorCode;
   status?: number;
   retryable: boolean;
+  /**
+   * The provider's own error identifier, when it has one distinct from our
+   * ErrorCode (e.g. Google's OAuth "invalid_grant" vs "unauthorized_client" -
+   * both map to our single "auth_error", but they mean different things:
+   * a dead/revoked refresh token vs a client/redirect-URI/grant-type
+   * mismatch. Never a token or secret value - just a short taxonomy code.
+   */
+  providerErrorCode?: string;
 
   constructor(
     code: ErrorCode,
     message: string,
-    opts: { status?: number; retryable?: boolean } = {},
+    opts: {
+      status?: number;
+      retryable?: boolean;
+      providerErrorCode?: string;
+    } = {},
   ) {
     super(message);
     this.name = "SyncError";
     this.code = code;
     this.status = opts.status;
     this.retryable = opts.retryable ?? false;
+    this.providerErrorCode = opts.providerErrorCode;
   }
 }
 
@@ -57,6 +70,7 @@ export interface NormalizedError {
   message: string;
   status?: number;
   retryable: boolean;
+  providerErrorCode?: string;
 }
 
 /** Map any thrown value into a safe, normalized shape for storage/response. */
@@ -67,6 +81,7 @@ export function normalizeError(err: unknown): NormalizedError {
       message: sanitizeMessage(err.message),
       status: err.status,
       retryable: err.retryable,
+      providerErrorCode: err.providerErrorCode,
     };
   }
 

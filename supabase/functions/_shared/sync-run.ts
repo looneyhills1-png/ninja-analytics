@@ -169,7 +169,12 @@ export async function runIntegrationSync(args: RunArgs): Promise<RunOutcome> {
         duration_ms: durationMs,
         error_code: normalized.code,
         error_message: normalized.message,
-        metadata: normalized.status ? { httpStatus: normalized.status } : {},
+        metadata: {
+          ...(normalized.status ? { httpStatus: normalized.status } : {}),
+          ...(normalized.providerErrorCode
+            ? { providerErrorCode: normalized.providerErrorCode }
+            : {}),
+        },
       })
       .eq("id", runId);
 

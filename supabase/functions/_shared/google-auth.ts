@@ -41,22 +41,38 @@ export async function getGoogleAccessToken(): Promise<string> {
   if (!res.ok) {
     // Google's *error* response to a token request is always
     // {error, error_description} - a standard OAuth error code plus a short
-    // human-readable reason (e.g. "invalid_grant" / "Token has been expired
-    // or revoked."). It never contains the refresh/access token or client
-    // secret (those only ever appear in a *successful* response, which we
-    // don't touch here), so surfacing it is safe and lets Sync History show
-    // the real cause instead of a bare HTTP code. sanitizeMessage() (see
-    // errors.ts) still redacts anything credential-shaped as a last resort
-    // before this reaches the database.
+    // human-readable reason. It never contains the refresh/access token or
+    // client secret (those only ever appear in a *successful* response,
+    // which we don't touch here), so surfacing it is safe and lets Sync
+    // History show the real cause instead of a bare HTTP code.
+    // sanitizeMessage() (see errors.ts) still redacts anything
+    // credential-shaped as a last resort before this reaches the database,
+    // and providerErrorCode (below) gives every caller a clean, structured
+    // field to alert/filter on without parsing the free-text message.
+    //
+    // The two codes that actually show up here mean different things, and
+    // this refresh-token grant can only ever surface the first:
+    //   - invalid_grant: the refresh token itself is dead - revoked by the
+    //     user/admin, or (while the OAuth consent screen is in "Testing")
+    //     auto-expired 7 days after it was issued. Fix: mint a new one
+    //     (`npm run oauth:google`) and update GOOGLE_REFRESH_TOKEN.
+    //   - unauthorized_client / invalid_client: GOOGLE_CLIENT_ID/SECRET
+    //     don't match a real, current OAuth client (wrong pair, or the
+    //     client secret was rotated in Google Cloud Console since). This
+    //     grant type never sends redirect_uri, so it can't itself produce
+    //     redirect_uri_mismatch - that only happens during the one-time
+    //     authorization step in scripts/google-oauth.ts.
+    let errorCode: string | undefined;
     let detail = "";
     try {
-      const body = (await res.json()) as {
+      const errBody = (await res.json()) as {
         error?: string;
         error_description?: string;
       };
-      if (body.error) {
-        detail = `: ${body.error}${
-          body.error_description ? ` - ${body.error_description}` : ""
+      errorCode = errBody.error;
+      if (errorCode) {
+        detail = `: ${errorCode}${
+          errBody.error_description ? ` - ${errBody.error_description}` : ""
         }`;
       }
     } catch {
@@ -65,7 +81,10 @@ export async function getGoogleAccessToken(): Promise<string> {
     throw new SyncError(
       "auth_error",
       `Google token refresh failed (HTTP ${res.status})${detail}`,
-      { status: res.status === 400 ? 401 : res.status },
+      {
+        status: res.status === 400 ? 401 : res.status,
+        providerErrorCode: errorCode,
+      },
     );
   }
 
