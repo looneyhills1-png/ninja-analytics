@@ -1,4 +1,9 @@
-import { SyncError, codeForStatus, isRetryableStatus } from "./errors.ts";
+import {
+  SyncError,
+  codeForStatus,
+  isRetryableStatus,
+  normalizeError,
+} from "./errors.ts";
 import { fetchWithRetry } from "./http.ts";
 import { getGoogleAccessToken } from "./google-auth.ts";
 import {
@@ -33,10 +38,35 @@ async function queryGsc(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    // Google's Search Console API error body is always
+    // {error: {code, message, status, errors: [...]}} - status is a short
+    // reason taxonomy (e.g. INVALID_ARGUMENT for a malformed request,
+    // PERMISSION_DENIED for a real access problem) and message is a plain
+    // validation/permission explanation, never a credential - safe to
+    // surface, and exactly what's needed to tell a code bug (fixable) apart
+    // from a genuinely unsupported/unavailable request for this property
+    // (not fixable, shouldn't be treated as a failure at all).
+    let detail = "";
+    let providerErrorCode: string | undefined;
+    try {
+      const errBody = (await res.json()) as {
+        error?: { message?: string; status?: string };
+      };
+      providerErrorCode = errBody.error?.status;
+      if (errBody.error?.message) {
+        detail = `: ${errBody.error.message}`;
+      }
+    } catch {
+      // Non-JSON body - fall back to the bare status.
+    }
     throw new SyncError(
       codeForStatus(res.status),
-      `GSC API returned HTTP ${res.status}`,
-      { status: res.status, retryable: isRetryableStatus(res.status) },
+      `GSC API returned HTTP ${res.status}${detail}`,
+      {
+        status: res.status,
+        retryable: isRetryableStatus(res.status),
+        providerErrorCode,
+      },
     );
   }
   const data = (await res.json()) as { rows?: GscApiRow[] };
@@ -89,6 +119,22 @@ export const gscAdapter: SyncAdapter = async ({
   let rowsFetched = aggregate.length;
   let rowsWritten = aggRows.length;
   const failed: string[] = [];
+  // Diagnostic detail per failed breakdown - Google's own reason code/message
+  // (never a credential), so a malformed request can be told apart from a
+  // property that genuinely doesn't expose this data, instead of every
+  // breakdown failure looking identical in Sync History. Additive only:
+  // failedBreakdowns itself is unchanged (deploy-ninja-analytics.yml's own
+  // gate reads that array directly).
+  const breakdownErrors: Record<string, { code: string; message: string }> = {};
+
+  function recordFailure(name: string, err: unknown) {
+    failed.push(name);
+    const n = normalizeError(err);
+    breakdownErrors[name] = {
+      code: n.providerErrorCode ?? n.code,
+      message: n.message,
+    };
+  }
 
   // --- Best-effort: top queries ---
   try {
@@ -107,8 +153,8 @@ export const gscAdapter: SyncAdapter = async ({
     );
     rowsFetched += written.fetched;
     rowsWritten += written.written;
-  } catch {
-    failed.push("query");
+  } catch (err) {
+    recordFailure("query", err);
   }
 
   // --- Best-effort: top pages ---
@@ -128,8 +174,8 @@ export const gscAdapter: SyncAdapter = async ({
     );
     rowsFetched += written.fetched;
     rowsWritten += written.written;
-  } catch {
-    failed.push("page");
+  } catch (err) {
+    recordFailure("page", err);
   }
 
   // --- Best-effort: query+page (which URL actually ranks for which query -
@@ -149,8 +195,8 @@ export const gscAdapter: SyncAdapter = async ({
     );
     rowsFetched += written.fetched;
     rowsWritten += written.written;
-  } catch {
-    failed.push("query_page");
+  } catch (err) {
+    recordFailure("query_page", err);
   }
 
   // --- Best-effort: search appearance (CLAUDE.md Phase 8 / "AI Search
@@ -174,8 +220,8 @@ export const gscAdapter: SyncAdapter = async ({
     );
     rowsFetched += written.fetched;
     rowsWritten += written.written;
-  } catch {
-    failed.push("search_appearance");
+  } catch (err) {
+    recordFailure("search_appearance", err);
   }
 
   return {
@@ -184,7 +230,7 @@ export const gscAdapter: SyncAdapter = async ({
     partial: failed.length > 0,
     rangeStart: startDate,
     rangeEnd: endDate,
-    metadata: { provider: "gsc", failedBreakdowns: failed },
+    metadata: { provider: "gsc", failedBreakdowns: failed, breakdownErrors },
   };
 };
 
