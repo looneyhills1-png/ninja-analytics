@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { useKeywordOpportunities } from "@/lib/hooks";
+import { Wand2 } from "lucide-react";
+import { useKeywordOpportunities, useSites } from "@/lib/hooks";
 import { usePrivacyMode } from "@/lib/privacy";
 import type { KeywordsOutletContext } from "@/features/keywords/KeywordsLayout";
 import { Card } from "@/components/ui/card";
@@ -9,6 +10,8 @@ import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { OpportunityBadgeList } from "@/features/keywords/OpportunityBadges";
 import { ScoreBar, ScoreFactorList } from "@/features/keywords/ScoreBar";
+import { FixPromptModal } from "@/features/keywords/FixPromptModal";
+import { buildFixPrompt } from "@/features/keywords/generateFixPrompt";
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -52,10 +55,16 @@ export function KeywordsOpportunitiesPage() {
   const { siteId, days } = useOutletContext<KeywordsOutletContext>();
   const privacy = usePrivacyMode();
   const opportunitiesQuery = useKeywordOpportunities(siteId, days);
+  // Already fetched by KeywordsLayout (same query key) - just reading the
+  // domain/name for the generated prompt, not a second network request.
+  const sitesQuery = useSites();
+  const site = sitesQuery.data?.find((s) => s.id === siteId);
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [fixPromptRow, setFixPromptRow] =
+    useState<KeywordOpportunityRow | null>(null);
 
   const category = params.get("category") as OpportunityCategory | null;
 
@@ -172,6 +181,7 @@ export function KeywordsOpportunitiesPage() {
                   <th className="px-2 py-2 text-right font-medium">CTR</th>
                   <th className="px-2 py-2 font-medium">First/Last seen</th>
                   <th className="px-2 py-2 font-medium">Score</th>
+                  <th className="px-2 py-2 font-medium">Fix</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,10 +239,24 @@ export function KeywordsOpportunitiesPage() {
                       <td className="px-2 py-2">
                         <ScoreBar score={row.score} />
                       </td>
+                      <td className="px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFixPromptRow(row);
+                          }}
+                          title="Generate Fix Prompt"
+                          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                        >
+                          <Wand2 className="h-3 w-3" />
+                          Fix
+                        </button>
+                      </td>
                     </tr>
                     {expanded === row.query && (
                       <tr className="border-b border-border bg-muted/20 last:border-0">
-                        <td colSpan={12} className="px-4 py-3">
+                        <td colSpan={13} className="px-4 py-3">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div>
                               <p className="mb-1 text-xs font-semibold">
@@ -272,6 +296,20 @@ export function KeywordsOpportunitiesPage() {
             </table>
           </div>
         </Card>
+      )}
+
+      {fixPromptRow && (
+        <FixPromptModal
+          title={`"${fixPromptRow.query}" - ${site?.name ?? "this site"}`}
+          prompt={buildFixPrompt(
+            {
+              domain: site?.domain ?? "unknown",
+              name: site?.name ?? "this site",
+            },
+            fixPromptRow,
+          )}
+          onClose={() => setFixPromptRow(null)}
+        />
       )}
     </div>
   );
