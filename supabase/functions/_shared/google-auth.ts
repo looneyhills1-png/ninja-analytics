@@ -39,10 +39,32 @@ export async function getGoogleAccessToken(): Promise<string> {
   });
 
   if (!res.ok) {
-    // Do not echo Google's body - it can include token hints.
+    // Google's *error* response to a token request is always
+    // {error, error_description} - a standard OAuth error code plus a short
+    // human-readable reason (e.g. "invalid_grant" / "Token has been expired
+    // or revoked."). It never contains the refresh/access token or client
+    // secret (those only ever appear in a *successful* response, which we
+    // don't touch here), so surfacing it is safe and lets Sync History show
+    // the real cause instead of a bare HTTP code. sanitizeMessage() (see
+    // errors.ts) still redacts anything credential-shaped as a last resort
+    // before this reaches the database.
+    let detail = "";
+    try {
+      const body = (await res.json()) as {
+        error?: string;
+        error_description?: string;
+      };
+      if (body.error) {
+        detail = `: ${body.error}${
+          body.error_description ? ` - ${body.error_description}` : ""
+        }`;
+      }
+    } catch {
+      // Non-JSON body - fall back to the bare status.
+    }
     throw new SyncError(
       "auth_error",
-      `Google token refresh failed (HTTP ${res.status})`,
+      `Google token refresh failed (HTTP ${res.status})${detail}`,
       { status: res.status === 400 ? 401 : res.status },
     );
   }
