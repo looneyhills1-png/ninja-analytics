@@ -9,6 +9,12 @@
 --   * Browser writes: none. All writes happen server-side via Edge
 --     Functions / future scheduled jobs using privileged (service_role)
 --     credentials.
+--
+-- Written idempotently (if not exists / drop-then-create) per the
+-- 0012_bing_diagnostic.sql precedent: deploy-ninja-analytics.yml's fallback
+-- path re-applies every migration from 0011 onward on each deploy where
+-- `supabase db push` can't run (see that workflow's comments), so every
+-- migration from here on must tolerate being executed more than once.
 
 -- ---------------------------------------------------------------------------
 -- search_query_page_daily: the GSC [date, query, page] combined breakdown.
@@ -20,7 +26,7 @@
 -- third best-effort breakdown fetch - not a new integration, not a new
 -- provider, same GSC Search Analytics API the site already calls.
 -- ---------------------------------------------------------------------------
-create table public.search_query_page_daily (
+create table if not exists public.search_query_page_daily (
   site_id uuid not null references public.sites (id) on delete cascade,
   engine text not null check (engine in ('google', 'bing')),
   metric_date date not null,
@@ -37,16 +43,20 @@ create table public.search_query_page_daily (
   primary key (site_id, engine, metric_date, query, page)
 );
 
-create index search_query_page_daily_site_date_idx
+create index if not exists search_query_page_daily_site_date_idx
   on public.search_query_page_daily (site_id, metric_date desc);
-create index search_query_page_daily_query_idx
+create index if not exists search_query_page_daily_query_idx
   on public.search_query_page_daily (site_id, engine, query);
 
 alter table public.search_query_page_daily enable row level security;
 
+drop policy if exists "search_query_page_daily admin select"
+  on public.search_query_page_daily;
 create policy "search_query_page_daily admin select"
   on public.search_query_page_daily as permissive for select to authenticated
   using (public.is_portfolio_admin());
+drop policy if exists "search_query_page_daily require aal2"
+  on public.search_query_page_daily;
 create policy "search_query_page_daily require aal2"
   on public.search_query_page_daily as restrictive for select to authenticated
   using ((select auth.jwt() ->> 'aal') = 'aal2');
@@ -67,7 +77,7 @@ grant select, insert, update, delete on public.search_query_page_daily
 -- manual spot-check) can write into the same shape GSC-derived estimates
 -- never touch.
 -- ---------------------------------------------------------------------------
-create table public.rank_snapshots (
+create table if not exists public.rank_snapshots (
   id uuid primary key default gen_random_uuid(),
   site_id uuid not null references public.sites (id) on delete cascade,
 
@@ -89,14 +99,16 @@ create table public.rank_snapshots (
   created_at timestamptz not null default now()
 );
 
-create index rank_snapshots_site_query_idx
+create index if not exists rank_snapshots_site_query_idx
   on public.rank_snapshots (site_id, query, engine, device, checked_at desc);
 
 alter table public.rank_snapshots enable row level security;
 
+drop policy if exists "rank_snapshots admin select" on public.rank_snapshots;
 create policy "rank_snapshots admin select"
   on public.rank_snapshots as permissive for select to authenticated
   using (public.is_portfolio_admin());
+drop policy if exists "rank_snapshots require aal2" on public.rank_snapshots;
 create policy "rank_snapshots require aal2"
   on public.rank_snapshots as restrictive for select to authenticated
   using ((select auth.jwt() ->> 'aal') = 'aal2');
@@ -115,7 +127,7 @@ grant select, insert, update, delete on public.rank_snapshots to service_role;
 --     looked at for a tracked query - empty until a Phase 4 SERP-observation
 --     worker exists. No paid SERP API is introduced by this migration.
 -- ---------------------------------------------------------------------------
-create table public.competitor_domains (
+create table if not exists public.competitor_domains (
   id uuid primary key default gen_random_uuid(),
   site_id uuid not null references public.sites (id) on delete cascade,
 
@@ -134,9 +146,13 @@ create table public.competitor_domains (
 
 alter table public.competitor_domains enable row level security;
 
+drop policy if exists "competitor_domains admin select"
+  on public.competitor_domains;
 create policy "competitor_domains admin select"
   on public.competitor_domains as permissive for select to authenticated
   using (public.is_portfolio_admin());
+drop policy if exists "competitor_domains require aal2"
+  on public.competitor_domains;
 create policy "competitor_domains require aal2"
   on public.competitor_domains as restrictive for select to authenticated
   using ((select auth.jwt() ->> 'aal') = 'aal2');
@@ -146,7 +162,7 @@ revoke all on public.competitor_domains from anon;
 grant select, insert, update, delete on public.competitor_domains
   to service_role;
 
-create table public.observed_serp_results (
+create table if not exists public.observed_serp_results (
   id uuid primary key default gen_random_uuid(),
   site_id uuid not null references public.sites (id) on delete cascade,
 
@@ -162,16 +178,20 @@ create table public.observed_serp_results (
   created_at timestamptz not null default now()
 );
 
-create index observed_serp_results_site_query_idx
+create index if not exists observed_serp_results_site_query_idx
   on public.observed_serp_results (site_id, query, engine, observed_at desc);
-create index observed_serp_results_domain_idx
+create index if not exists observed_serp_results_domain_idx
   on public.observed_serp_results (site_id, domain);
 
 alter table public.observed_serp_results enable row level security;
 
+drop policy if exists "observed_serp_results admin select"
+  on public.observed_serp_results;
 create policy "observed_serp_results admin select"
   on public.observed_serp_results as permissive for select to authenticated
   using (public.is_portfolio_admin());
+drop policy if exists "observed_serp_results require aal2"
+  on public.observed_serp_results;
 create policy "observed_serp_results require aal2"
   on public.observed_serp_results as restrictive for select to authenticated
   using ((select auth.jwt() ->> 'aal') = 'aal2');

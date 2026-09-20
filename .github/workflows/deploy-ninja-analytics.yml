@@ -8,12 +8,31 @@ name: Deploy Ninja Analytics
 #
 # Auth: SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF only (GitHub Actions
 # repository secrets). No SUPABASE_DB_PASSWORD is set or requested - `supabase
-# db push` is attempted for real, and if it turns out to need a direct
-# Postgres connection, the workflow falls back to applying the one new
-# migration (0011 - idempotent create-or-replace/grant/revoke statements
-# only, no CREATE TABLE) through the Supabase Management API's
-# database/query endpoint instead, which authenticates with the access token
-# alone. See scripts/mgmt_sql.sh.
+# db push` is attempted for real, but this project's live database has no
+# recorded migration history in supabase_migrations.schema_migrations (every
+# migration to date was actually applied through the Management API path
+# below, never through a successful `db push`), so the CLI always concludes
+# nothing has been applied yet and tries to replay migration 0001 from
+# scratch, which fails with "relation already exists" (SQLSTATE 42P07). That
+# failure is expected, not a real regression - the fallback below is the
+# real, working mechanism.
+#
+# The fallback re-applies EVERY migration file from 0011 onward (0011 was
+# the first migration written idempotently), via the Management API's
+# database/query endpoint (scripts/mgmt_sql.sh), authenticating with the
+# access token alone. It is NOT hardcoded to a single migration file: it
+# globs supabase/migrations/*.sql and runs every one whose numeric prefix is
+# 0011 or later, in order, every deploy. This only stays safe as long as
+# every migration from 0011 onward is written to tolerate being executed
+# more than once - `create table if not exists`, `create index if not
+# exists`, `drop policy if exists ... ; create policy ...`, `create or
+# replace function`, and naturally-idempotent grant/revoke. Follow that
+# convention for every future migration or this fallback will start failing
+# on its second run the same way `db push` already does.
+#
+# Migrations 0001-0010 are intentionally excluded (they predate the
+# idempotent convention and are already confirmed live) - never add them
+# here without first making them idempotent too.
 
 on:
   workflow_dispatch: {}
@@ -87,30 +106,65 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: "Fallback: apply migration 0011 via Management API (no DB password)"
+      - name: "Fallback: apply every migration from 0011 onward via Management API"
         if: steps.db_push.outcome == 'failure'
         run: |
           echo "supabase db push failed without a DB password (see 'Report db push outcome' step for the exact error)." \
-            "Applying migration 0011 directly instead - it is safe to run standalone:" \
-            "every statement is create-or-replace / grant / revoke, there is no CREATE TABLE." \
+            "Applying every migration from 0011 onward directly instead, in order -" \
+            "each one is written to be safe to re-run (see this workflow's header comment)." \
             | tee -a "$GITHUB_STEP_SUMMARY"
-          bash .github/workflows/scripts/mgmt_sql.sh \
-            "$(cat supabase/migrations/0011_health_and_manual_full_sync.sql)"
+          echo "### Migrations applied via Management API" >> "$GITHUB_STEP_SUMMARY"
+          applied=0
+          for f in supabase/migrations/*.sql; do
+            base=$(basename "$f")
+            version="${base%%_*}"
+            # Zero-padded 4-digit numeric prefixes sort correctly as strings.
+            if [[ "$version" > "0010" ]]; then
+              echo "Applying $base ..."
+              echo "- $base" >> "$GITHUB_STEP_SUMMARY"
+              bash .github/workflows/scripts/mgmt_sql.sh "$(cat "$f")" > /dev/null
+              applied=$((applied + 1))
+            fi
+          done
+          echo "Applied $applied migration file(s) from 0011 onward."
+          if [ "$applied" -eq 0 ]; then
+            echo "::error::No migration files matched (version > 0010) - check the glob/versioning logic."
+            exit 1
+          fi
 
-      - name: Verify the two new functions exist in the live database
+      - name: Verify Phase 1/2 schema exists in the live database
         run: |
-          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+          fn_result=$(bash .github/workflows/scripts/mgmt_sql.sh \
             "select proname from pg_proc where pronamespace = 'public'::regnamespace and proname in ('ninja_analytics_health', 'run_all_analytics_syncs') order by proname;")
-          echo "$result" | tee /tmp/functions_check.json
+          echo "$fn_result" | tee /tmp/functions_check.json
+
+          table_result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('search_query_page_daily', 'rank_snapshots', 'competitor_domains', 'observed_serp_results') order by table_name;")
+          echo "$table_result" | tee /tmp/tables_check.json
+
           {
             echo "### public functions present after migration"
             echo '```json'
             cat /tmp/functions_check.json
             echo '```'
+            echo "### Phase 1/2 tables present after migration"
+            echo '```json'
+            cat /tmp/tables_check.json
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          count=$(echo "$result" | jq 'length')
-          if [ "$count" -ne 2 ]; then
-            echo "::error::Expected both ninja_analytics_health and run_all_analytics_syncs in pg_proc, found $count. Migration 0011 was not fully applied."
+
+          fn_count=$(echo "$fn_result" | jq 'length')
+          table_count=$(echo "$table_result" | jq 'length')
+          fail=0
+          if [ "$fn_count" -ne 2 ]; then
+            echo "::error::Expected both ninja_analytics_health and run_all_analytics_syncs in pg_proc, found $fn_count. Migration 0011 was not fully applied."
+            fail=1
+          fi
+          if [ "$table_count" -ne 4 ]; then
+            echo "::error::Expected search_query_page_daily, rank_snapshots, competitor_domains and observed_serp_results to all exist, found $table_count of 4. Migration 0014 was not fully applied."
+            fail=1
+          fi
+          if [ "$fail" -ne 0 ]; then
             exit 1
           fi
 
@@ -269,6 +323,30 @@ jobs:
 
           echo "All live checks passed: migration applied, all functions deployed, health check callable, GSC/GA4/Bing/uptime all wrote rows with a successful status." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify the GSC query_page breakdown succeeded (search_query_page_daily)
+        run: |
+          # This is the specific breakdown Keyword Intelligence's ranking-URL
+          # and cannibalisation detection depend on - a silent failure here
+          # (e.g. search_query_page_daily missing) must fail the deploy, not
+          # just show up as a quiet "partial" status later.
+          result=$(bash .github/workflows/scripts/mgmt_sql.sh \
+            "select s.name, sr.status, sr.metadata -> 'failedBreakdowns' as failed_breakdowns
+             from public.sync_runs sr
+             join public.sites s on s.id = sr.site_id
+             where sr.source = 'gsc' and sr.started_at > now() - interval '10 minutes'
+             order by sr.started_at desc;")
+          echo "$result" | tee /tmp/gsc_query_page_check.json
+          {
+            echo "### GSC query_page breakdown status (this run's sync_runs rows)"
+            echo '```json'
+            cat /tmp/gsc_query_page_check.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if echo "$result" | jq -e 'any(.[]; (.failed_breakdowns // []) | index("query_page") != null)' > /dev/null; then
+            echo "::error::At least one site's GSC sync reported query_page in failedBreakdowns - search_query_page_daily is still missing or broken."
+            exit 1
+          fi
+
       - name: Deep per-provider proof - real rows, not just a status flag
         run: |
           # A "success" status only proves the adapter ran without throwing.
@@ -296,6 +374,7 @@ jobs:
                     (select count(*) from public.search_daily sd where sd.site_id = s.id and sd.engine = 'bing') as bing_search_daily_rows,
                     (select count(*) from public.search_query_daily sq where sq.site_id = s.id and sq.engine = 'google') as gsc_query_rows,
                     (select count(*) from public.search_page_daily sp where sp.site_id = s.id and sp.engine = 'google') as gsc_page_rows,
+                    (select count(*) from public.search_query_page_daily sqp where sqp.site_id = s.id and sqp.engine = 'google') as gsc_query_page_rows,
                     (select jsonb_build_object('ok', u.ok, 'status_code', u.status_code, 'checked_at', u.checked_at)
                      from public.uptime_checks u where u.site_id = s.id order by u.checked_at desc limit 1) as latest_uptime
              from public.sites s
