@@ -23,13 +23,24 @@ alter table public.site_audit_pages
   add column if not exists response_time_ms integer;
 
 -- ---------------------------------------------------------------------------
--- search_appearance_daily: a fourth best-effort GSC breakdown, dimensioned
--- by [date, searchAppearance]. This is the "GSC Generative AI features data
--- where exposed" data CLAUDE.md's Phase 8 calls for - Google has not
--- published a fixed, stable enum of searchAppearance values for AI features
--- as of this writing, so the row is stored verbatim (whatever value GSC
--- returns) and the UI applies a heuristic, clearly-labelled "looks
--- AI-related" filter rather than assuming a specific string.
+-- search_appearance_daily: a fourth best-effort GSC breakdown. This is the
+-- "GSC Generative AI features data where exposed" data CLAUDE.md's Phase 8
+-- calls for - Google has not published a fixed, stable enum of
+-- searchAppearance values for AI features as of this writing, so the row
+-- is stored verbatim (whatever value GSC returns) and the UI applies a
+-- heuristic, clearly-labelled "looks AI-related" filter rather than
+-- assuming a specific string.
+--
+-- Despite the table name, this is NOT dimensioned by [date, searchAppearance]
+-- the way the other three breakdowns are - Google's Search Analytics API
+-- rejects combining searchAppearance with any other dimension ("Cannot
+-- group by search appearance dimension together with another dimension"),
+-- so each sync queries searchAppearance alone and gets one row per
+-- appearance type aggregated over the whole requested date range, not a
+-- true per-day figure. metric_date is that range's end date, used only as
+-- a chronological/upsert anchor (see _shared/gsc.ts) - each day's synced
+-- row is a "trailing window as of today" snapshot, not a distinct daily
+-- measurement the way search_query_daily/search_page_daily's rows are.
 -- ---------------------------------------------------------------------------
 create table if not exists public.search_appearance_daily (
   site_id uuid not null references public.sites (id) on delete cascade,

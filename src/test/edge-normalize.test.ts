@@ -3,6 +3,7 @@ import {
   ga4DateToIso,
   normalizeGa4Rows,
   normalizeGscRows,
+  normalizeGscSearchAppearance,
   type Ga4Report,
 } from "../../supabase/functions/_shared/normalize";
 import {
@@ -56,6 +57,65 @@ describe("normalizeGscRows", () => {
 
   it("handles an undefined rows array", () => {
     expect(normalizeGscRows(undefined, SITE, UPDATED)).toEqual([]);
+  });
+});
+
+describe("normalizeGscSearchAppearance", () => {
+  // Google's API rejects combining searchAppearance with any other
+  // dimension (see _shared/gsc.ts), so these rows only ever carry
+  // keys[0] = the appearance type - no date at all, unlike every other
+  // GSC breakdown. The caller supplies one metricDate (the request's own
+  // end date) to anchor every row to, since there is no per-row date to
+  // read.
+  it("uses the caller-supplied metricDate for every row, keyed by keys[0] alone", () => {
+    const rows = normalizeGscSearchAppearance(
+      [
+        { keys: ["AMP_BLUE_LINK"], clicks: 12, impressions: 300 },
+        { keys: ["RICHCARD"], clicks: 3, impressions: 40 },
+      ],
+      "2026-09-19",
+    );
+    expect(rows).toEqual([
+      {
+        metric_date: "2026-09-19",
+        key: "AMP_BLUE_LINK",
+        clicks: 12,
+        impressions: 300,
+        ctr: null,
+        average_position: null,
+      },
+      {
+        metric_date: "2026-09-19",
+        key: "RICHCARD",
+        clicks: 3,
+        impressions: 40,
+        ctr: null,
+        average_position: null,
+      },
+    ]);
+  });
+
+  it("sorts by clicks descending and caps at maxRows", () => {
+    const rows = normalizeGscSearchAppearance(
+      [
+        { keys: ["A"], clicks: 1 },
+        { keys: ["B"], clicks: 9 },
+        { keys: ["C"], clicks: 5 },
+      ],
+      "2026-09-19",
+      2,
+    );
+    expect(rows.map((r) => r.key)).toEqual(["B", "C"]);
+  });
+
+  it("drops rows with an empty/missing key and handles an undefined array", () => {
+    expect(
+      normalizeGscSearchAppearance(
+        [{ keys: [] }, { keys: [""] }],
+        "2026-09-19",
+      ),
+    ).toHaveLength(0);
+    expect(normalizeGscSearchAppearance(undefined, "2026-09-19")).toEqual([]);
   });
 });
 

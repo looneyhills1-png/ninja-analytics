@@ -10,7 +10,9 @@ import {
   normalizeGscRows,
   normalizeGscBreakdown,
   normalizeGscQueryPageBreakdown,
+  normalizeGscSearchAppearance,
   type GscApiRow,
+  type GscBreakdownRow,
 } from "./normalize.ts";
 import { defaultRange } from "./range.ts";
 import type { SupabaseClient } from "./database.ts";
@@ -138,16 +140,18 @@ export const gscAdapter: SyncAdapter = async ({
 
   // --- Best-effort: top queries ---
   try {
+    const apiRows = await queryGsc(token, property, {
+      startDate,
+      endDate,
+      dimensions: ["date", "query"],
+      rowLimit: BREAKDOWN_ROW_LIMIT,
+    });
     const written = await syncBreakdown(
       admin,
       "search_query_daily",
       "query",
-      await queryGsc(token, property, {
-        startDate,
-        endDate,
-        dimensions: ["date", "query"],
-        rowLimit: BREAKDOWN_ROW_LIMIT,
-      }),
+      normalizeGscBreakdown(apiRows, BREAKDOWN_ROW_LIMIT),
+      apiRows.length,
       site.id,
       updatedAt,
     );
@@ -159,16 +163,18 @@ export const gscAdapter: SyncAdapter = async ({
 
   // --- Best-effort: top pages ---
   try {
+    const apiRows = await queryGsc(token, property, {
+      startDate,
+      endDate,
+      dimensions: ["date", "page"],
+      rowLimit: BREAKDOWN_ROW_LIMIT,
+    });
     const written = await syncBreakdown(
       admin,
       "search_page_daily",
       "page",
-      await queryGsc(token, property, {
-        startDate,
-        endDate,
-        dimensions: ["date", "page"],
-        rowLimit: BREAKDOWN_ROW_LIMIT,
-      }),
+      normalizeGscBreakdown(apiRows, BREAKDOWN_ROW_LIMIT),
+      apiRows.length,
       site.id,
       updatedAt,
     );
@@ -204,17 +210,29 @@ export const gscAdapter: SyncAdapter = async ({
   // Google has not published a fixed enum of searchAppearance values for AI
   // features, so every value GSC returns is stored verbatim; the UI applies
   // a heuristic "looks AI-related" filter rather than assuming a name.
+  //
+  // Unlike every other breakdown here, this one must NOT include "date" -
+  // Google's API rejects combining searchAppearance with any other
+  // dimension ("Cannot group by search appearance dimension together with
+  // another dimension", confirmed live). So this is queried alone and
+  // normalized differently (normalizeGscSearchAppearance, not
+  // normalizeGscBreakdown): one row per appearance type, aggregated over
+  // the whole range, anchored to endDate as its metric_date - see the
+  // schema comment on search_appearance_daily (0016 migration) for what
+  // that means for this one table.
   try {
+    const apiRows = await queryGsc(token, property, {
+      startDate,
+      endDate,
+      dimensions: ["searchAppearance"],
+      rowLimit: BREAKDOWN_ROW_LIMIT,
+    });
     const written = await syncBreakdown(
       admin,
       "search_appearance_daily",
       "search_appearance",
-      await queryGsc(token, property, {
-        startDate,
-        endDate,
-        dimensions: ["date", "searchAppearance"],
-        rowLimit: BREAKDOWN_ROW_LIMIT,
-      }),
+      normalizeGscSearchAppearance(apiRows, endDate, BREAKDOWN_ROW_LIMIT),
+      apiRows.length,
       site.id,
       updatedAt,
     );
@@ -238,11 +256,12 @@ async function syncBreakdown(
   admin: SupabaseClient,
   table: "search_query_daily" | "search_page_daily" | "search_appearance_daily",
   keyColumn: "query" | "page" | "search_appearance",
-  apiRows: GscApiRow[],
+  normalizedRows: GscBreakdownRow[],
+  fetchedCount: number,
   siteId: string,
   updatedAt: string,
 ): Promise<{ fetched: number; written: number }> {
-  const rows = normalizeGscBreakdown(apiRows, BREAKDOWN_ROW_LIMIT).map((r) => ({
+  const rows = normalizedRows.map((r) => ({
     site_id: siteId,
     engine: "google" as const,
     metric_date: r.metric_date,
@@ -260,7 +279,7 @@ async function syncBreakdown(
       .upsert(rows, { onConflict: `site_id,engine,metric_date,${keyColumn}` });
     if (error) throw error;
   }
-  return { fetched: apiRows.length, written: rows.length };
+  return { fetched: fetchedCount, written: rows.length };
 }
 
 async function syncQueryPageBreakdown(
