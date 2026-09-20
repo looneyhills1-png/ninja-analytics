@@ -4,6 +4,12 @@ import { fetchAllPages } from "@/lib/paginate";
 import { computeInsights, type InsightsResult } from "@/lib/insights";
 import { aggregateBreakdown, type TermRow } from "@/lib/search-terms";
 import {
+  computeKeywordOpportunities,
+  type KeywordOpportunityRow,
+  type QueryDailyRow,
+  type QueryPageDailyRow,
+} from "@/lib/keyword-opportunities";
+import {
   buildExportComputed,
   type PortfolioExportComputed,
 } from "@/lib/portfolio-export";
@@ -188,6 +194,66 @@ export async function getSiteSearchTerms(
       pages: getDateCoverage(pageRows),
     },
   };
+}
+
+// Keyword Intelligence / Opportunity Engine (Phase 1) --------------------------
+/**
+ * Everything the Keyword Opportunity Engine needs for one site: Google query
+ * history (for trend/position/CTR), the query+page breakdown (for the real
+ * ranking URL and cannibalisation), and Bing query history (corroboration
+ * only). All three tables already exist for GSC/Bing sync - no new provider
+ * call. `days*2` of history matches every other current/previous comparison
+ * in this app (see getSiteSearchTerms).
+ */
+export async function getKeywordOpportunities(
+  siteId: string,
+  days: number,
+): Promise<KeywordOpportunityRow[]> {
+  const since = format(subDays(new Date(), days * 2), "yyyy-MM-dd");
+  const site = await getSite(siteId);
+  if (!site) return [];
+
+  const [queryRows, bingQueryRows, queryPageRows] = await Promise.all([
+    fetchAllPages<QueryDailyRow>(() =>
+      supabase
+        .from("search_query_daily")
+        .select(
+          "metric_date, query, clicks, impressions, ctr, average_position",
+        )
+        .eq("site_id", siteId)
+        .eq("engine", "google")
+        .gte("metric_date", since)
+        .order("metric_date"),
+    ),
+    fetchAllPages<QueryDailyRow>(() =>
+      supabase
+        .from("search_query_daily")
+        .select(
+          "metric_date, query, clicks, impressions, ctr, average_position",
+        )
+        .eq("site_id", siteId)
+        .eq("engine", "bing")
+        .gte("metric_date", since)
+        .order("metric_date"),
+    ),
+    fetchAllPages<QueryPageDailyRow>(() =>
+      supabase
+        .from("search_query_page_daily")
+        .select("metric_date, query, page, clicks, impressions")
+        .eq("site_id", siteId)
+        .eq("engine", "google")
+        .gte("metric_date", since)
+        .order("metric_date"),
+    ),
+  ]);
+
+  return computeKeywordOpportunities({
+    site: { domain: site.domain, name: site.name },
+    queryRows,
+    bingQueryRows,
+    queryPageRows,
+    days,
+  });
 }
 
 export async function getIntegrationStatuses(

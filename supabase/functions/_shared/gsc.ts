@@ -4,6 +4,7 @@ import { getGoogleAccessToken } from "./google-auth.ts";
 import {
   normalizeGscRows,
   normalizeGscBreakdown,
+  normalizeGscQueryPageBreakdown,
   type GscApiRow,
 } from "./normalize.ts";
 import { defaultRange } from "./range.ts";
@@ -131,6 +132,27 @@ export const gscAdapter: SyncAdapter = async ({
     failed.push("page");
   }
 
+  // --- Best-effort: query+page (which URL actually ranks for which query -
+  // keyword-intelligence Phase 1). Independent of the two breakdowns above:
+  // a failure here never affects them, and their failure never blocks this.
+  try {
+    const written = await syncQueryPageBreakdown(
+      admin,
+      await queryGsc(token, property, {
+        startDate,
+        endDate,
+        dimensions: ["date", "query", "page"],
+        rowLimit: BREAKDOWN_ROW_LIMIT,
+      }),
+      site.id,
+      updatedAt,
+    );
+    rowsFetched += written.fetched;
+    rowsWritten += written.written;
+  } catch {
+    failed.push("query_page");
+  }
+
   return {
     rowsFetched,
     rowsWritten,
@@ -165,6 +187,36 @@ async function syncBreakdown(
     const { error } = await admin
       .from(table)
       .upsert(rows, { onConflict: `site_id,engine,metric_date,${keyColumn}` });
+    if (error) throw error;
+  }
+  return { fetched: apiRows.length, written: rows.length };
+}
+
+async function syncQueryPageBreakdown(
+  admin: SupabaseClient,
+  apiRows: GscApiRow[],
+  siteId: string,
+  updatedAt: string,
+): Promise<{ fetched: number; written: number }> {
+  const rows = normalizeGscQueryPageBreakdown(apiRows, BREAKDOWN_ROW_LIMIT).map(
+    (r) => ({
+      site_id: siteId,
+      engine: "google" as const,
+      metric_date: r.metric_date,
+      query: r.query,
+      page: r.page,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr: r.ctr,
+      average_position: r.average_position,
+      updated_at: updatedAt,
+    }),
+  );
+
+  if (rows.length > 0) {
+    const { error } = await admin
+      .from("search_query_page_daily")
+      .upsert(rows, { onConflict: "site_id,engine,metric_date,query,page" });
     if (error) throw error;
   }
   return { fetched: apiRows.length, written: rows.length };

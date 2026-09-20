@@ -43,6 +43,41 @@ const SystemPage = lazy(() =>
     default: m.SystemPage,
   })),
 );
+const KeywordsLayout = lazy(() =>
+  import("@/features/keywords/KeywordsLayout").then((m) => ({
+    default: m.KeywordsLayout,
+  })),
+);
+const KeywordsOverviewPage = lazy(() =>
+  import("@/features/keywords/KeywordsOverviewPage").then((m) => ({
+    default: m.KeywordsOverviewPage,
+  })),
+);
+const KeywordsOpportunitiesPage = lazy(() =>
+  import("@/features/keywords/KeywordsOpportunitiesPage").then((m) => ({
+    default: m.KeywordsOpportunitiesPage,
+  })),
+);
+const KeywordsRankingsPage = lazy(() =>
+  import("@/features/keywords/KeywordsRankingsPage").then((m) => ({
+    default: m.KeywordsRankingsPage,
+  })),
+);
+const KeywordsQueriesPage = lazy(() =>
+  import("@/features/keywords/KeywordsQueriesPage").then((m) => ({
+    default: m.KeywordsQueriesPage,
+  })),
+);
+const KeywordsPagesPage = lazy(() =>
+  import("@/features/keywords/KeywordsPagesPage").then((m) => ({
+    default: m.KeywordsPagesPage,
+  })),
+);
+const KeywordsClustersPage = lazy(() =>
+  import("@/features/keywords/KeywordsClustersPage").then((m) => ({
+    default: m.KeywordsClustersPage,
+  })),
+);
 const DemoLayout = lazy(() =>
   import("@/features/demo/DemoPages").then((m) => ({
     default: m.DemoLayout,
@@ -137,6 +172,21 @@ export const router = createBrowserRouter(
             { path: "/", element: <OverviewPage /> },
             { path: "/sites", element: <SitesPage /> },
             { path: "/sites/:siteId", element: <SiteDetailPage /> },
+            {
+              path: "/keywords",
+              element: <KeywordsLayout />,
+              children: [
+                { index: true, element: <KeywordsOverviewPage /> },
+                {
+                  path: "opportunities",
+                  element: <KeywordsOpportunitiesPage />,
+                },
+                { path: "rankings", element: <KeywordsRankingsPage /> },
+                { path: "queries", element: <KeywordsQueriesPage /> },
+                { path: "pages", element: <KeywordsPagesPage /> },
+                { path: "clusters", element: <KeywordsClustersPage /> },
+              ],
+            },
             { path: "/sync-runs", element: <SyncRunsPage /> },
             { path: "/system", element: <SystemPage /> },
             { path: "/settings/security", element: <SecuritySettingsPage /> },

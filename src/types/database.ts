@@ -17,6 +17,8 @@ export type SyncSource = "gsc" | "ga4" | "bing";
 export type SearchEngine = "google" | "bing";
 export type SyncStatus = "running" | "success" | "partial" | "failed";
 export type TriggerType = "scheduled" | "manual" | "backfill";
+export type RankDevice = "desktop" | "mobile";
+export type RankSnapshotSource = "manual" | "observed_serp";
 
 export interface Database {
   public: {
@@ -300,6 +302,152 @@ export interface Database {
           },
         ];
       };
+      search_query_page_daily: {
+        Row: {
+          site_id: string;
+          engine: SearchEngine;
+          metric_date: string;
+          query: string;
+          page: string;
+          clicks: number;
+          impressions: number;
+          ctr: number | null;
+          average_position: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          site_id: string;
+          engine: SearchEngine;
+          metric_date: string;
+          query: string;
+          page: string;
+          clicks?: number;
+          impressions?: number;
+          ctr?: number | null;
+          average_position?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["search_query_page_daily"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "search_query_page_daily_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rank_snapshots: {
+        Row: {
+          id: string;
+          site_id: string;
+          query: string;
+          engine: SearchEngine;
+          device: RankDevice;
+          country: string | null;
+          location: string | null;
+          ranking_url: string | null;
+          observed_rank: number | null;
+          source: RankSnapshotSource;
+          checked_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          query: string;
+          engine?: SearchEngine;
+          device?: RankDevice;
+          country?: string | null;
+          location?: string | null;
+          ranking_url?: string | null;
+          observed_rank?: number | null;
+          source?: RankSnapshotSource;
+          checked_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["rank_snapshots"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "rank_snapshots_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      competitor_domains: {
+        Row: {
+          id: string;
+          site_id: string;
+          domain: string;
+          label: string | null;
+          note: string | null;
+          auto_discovered: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          domain: string;
+          label?: string | null;
+          note?: string | null;
+          auto_discovered?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["competitor_domains"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "competitor_domains_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      observed_serp_results: {
+        Row: {
+          id: string;
+          site_id: string;
+          query: string;
+          engine: SearchEngine;
+          observed_at: string;
+          domain: string;
+          url: string | null;
+          rank_observed: number | null;
+          is_own_site: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          query: string;
+          engine?: SearchEngine;
+          observed_at?: string;
+          domain: string;
+          url?: string | null;
+          rank_observed?: number | null;
+          is_own_site?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["observed_serp_results"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "observed_serp_results_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       uptime_checks: {
         Row: {
           site_id: string;
@@ -365,6 +513,10 @@ export type AnalyticsDaily = Tables<"analytics_daily">;
 export type SearchDaily = Tables<"search_daily">;
 export type SearchQueryDaily = Tables<"search_query_daily">;
 export type SearchPageDaily = Tables<"search_page_daily">;
+export type SearchQueryPageDaily = Tables<"search_query_page_daily">;
+export type RankSnapshot = Tables<"rank_snapshots">;
+export type CompetitorDomain = Tables<"competitor_domains">;
+export type ObservedSerpResult = Tables<"observed_serp_results">;
 export type SyncRun = Tables<"sync_runs">;
 export type IntegrationStatus = Tables<"integration_status">;
 export type TrackedQuery = Tables<"tracked_queries">;

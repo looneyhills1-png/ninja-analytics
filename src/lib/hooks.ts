@@ -8,6 +8,7 @@ import {
   addTrackedQuery,
   getAiBriefing,
   getIntegrationStatuses,
+  getKeywordOpportunities,
   getPortfolioPageDaily,
   getSitePageDaily,
   getTrackedQueryHistory,
@@ -48,6 +49,8 @@ export const queryKeys = {
   sitePageDaily: (siteId: string, days: number) =>
     ["site-page-daily", siteId, days] as const,
   portfolioPageDaily: (days: number) => ["portfolio-page-daily", days] as const,
+  keywordOpportunities: (siteId: string, days: number) =>
+    ["keyword-opportunities", siteId, days] as const,
 };
 
 export function useSites() {
@@ -207,6 +210,18 @@ export function usePortfolioPageDaily(days: number) {
   return useQuery({
     queryKey: queryKeys.portfolioPageDaily(days),
     queryFn: () => getPortfolioPageDaily(days),
+  });
+}
+
+/** Keyword Opportunity Engine (Phase 1) - computed client-side from data
+ * already fetched, so this is cheap: cached like any other query, not a new
+ * provider call. */
+export function useKeywordOpportunities(siteId: string, days: number) {
+  return useQuery({
+    queryKey: queryKeys.keywordOpportunities(siteId, days),
+    queryFn: () => getKeywordOpportunities(siteId, days),
+    enabled: !!siteId,
+    placeholderData: keepPreviousData,
   });
 }
 
