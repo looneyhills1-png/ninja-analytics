@@ -5,10 +5,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  addAiVisibilityPrompt,
   addCompetitorDomain,
   addTrackedQuery,
   addTrackedRankKeyword,
   getAiBriefing,
+  getAiVisibilityObservations,
+  getAiVisibilityPrompts,
   getCommonCrawlPages,
   getCommonCrawlRuns,
   getCompetitorDomains,
@@ -18,16 +21,23 @@ import {
   getObservedSerpResults,
   getPortfolioPageDaily,
   getRankSnapshots,
+  getSearchAppearanceDaily,
+  getSiteAuditIssues,
+  getSiteAuditPages,
+  getSiteAuditRuns,
   getSitePageDaily,
   getTrackedQueryHistory,
   getTrackedRankKeywords,
   getUptimeSummaries,
+  recordAiVisibilityObservation,
   recordRankObservation,
   recordSerpObservation,
+  removeAiVisibilityPrompt,
   removeCompetitorDomain,
   removeTrackedQuery,
   removeTrackedRankKeyword,
   triggerCommonCrawlSync,
+  triggerSiteAudit,
   getSite,
   getSiteMetrics,
   getSites,
@@ -39,6 +49,8 @@ import {
   invokeManualSync,
   saveSite,
   deleteSite,
+  type AiObservationInput,
+  type AiPromptFormValues,
   type CompetitorDomainFormValues,
   type ManualSource,
   type RankObservationInput,
@@ -80,6 +92,15 @@ export const queryKeys = {
   commonCrawlRuns: (domain: string) => ["common-crawl-runs", domain] as const,
   engineQueryPositions: (siteId: string, days: number) =>
     ["engine-query-positions", siteId, days] as const,
+  siteAuditRuns: (siteId: string) => ["site-audit-runs", siteId] as const,
+  siteAuditIssues: (runId: string) => ["site-audit-issues", runId] as const,
+  siteAuditPages: (runId: string) => ["site-audit-pages", runId] as const,
+  searchAppearanceDaily: (siteId: string, days: number) =>
+    ["search-appearance-daily", siteId, days] as const,
+  aiVisibilityPrompts: (siteId: string) =>
+    ["ai-visibility-prompts", siteId] as const,
+  aiVisibilityObservations: (siteId: string) =>
+    ["ai-visibility-observations", siteId] as const,
 };
 
 export function useSites() {
@@ -398,6 +419,103 @@ export function useTriggerCommonCrawlSync() {
     onSuccess: (_result, domain) => {
       qc.invalidateQueries({ queryKey: queryKeys.commonCrawlPages(domain) });
       qc.invalidateQueries({ queryKey: queryKeys.commonCrawlRuns(domain) });
+    },
+  });
+}
+
+// Site Audit (Phase 5) --------------------------------------------------------
+
+export function useSiteAuditRuns(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.siteAuditRuns(siteId),
+    queryFn: () => getSiteAuditRuns(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useSiteAuditIssues(runId: string) {
+  return useQuery({
+    queryKey: queryKeys.siteAuditIssues(runId),
+    queryFn: () => getSiteAuditIssues(runId),
+    enabled: !!runId,
+  });
+}
+
+export function useSiteAuditPages(runId: string) {
+  return useQuery({
+    queryKey: queryKeys.siteAuditPages(runId),
+    queryFn: () => getSiteAuditPages(runId),
+    enabled: !!runId,
+  });
+}
+
+/** On-demand only - never scheduled. Bounded BFS crawl of the site's own
+ * domain (see supabase/functions/site-audit-crawl). */
+export function useTriggerSiteAudit(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => triggerSiteAudit(siteId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.siteAuditRuns(siteId) });
+    },
+  });
+}
+
+// AI Visibility (Phase 8 / "AI Search source coverage") ---------------------
+
+export function useSearchAppearanceDaily(siteId: string, days: number) {
+  return useQuery({
+    queryKey: queryKeys.searchAppearanceDaily(siteId, days),
+    queryFn: () => getSearchAppearanceDaily(siteId, days),
+    enabled: !!siteId,
+  });
+}
+
+export function useAiVisibilityPrompts(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.aiVisibilityPrompts(siteId),
+    queryFn: () => getAiVisibilityPrompts(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useAddAiVisibilityPrompt(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (values: AiPromptFormValues) => addAiVisibilityPrompt(values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.aiVisibilityPrompts(siteId) });
+    },
+  });
+}
+
+export function useRemoveAiVisibilityPrompt(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => removeAiVisibilityPrompt(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.aiVisibilityPrompts(siteId) });
+    },
+  });
+}
+
+export function useAiVisibilityObservations(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.aiVisibilityObservations(siteId),
+    queryFn: () => getAiVisibilityObservations(siteId),
+    enabled: !!siteId,
+  });
+}
+
+export function useRecordAiVisibilityObservation(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AiObservationInput) =>
+      recordAiVisibilityObservation(input),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: queryKeys.aiVisibilityObservations(siteId),
+      });
     },
   });
 }

@@ -103,6 +103,16 @@ const CompetitorsLinksPage = lazy(() =>
     default: m.CompetitorsLinksPage,
   })),
 );
+const SiteAuditPage = lazy(() =>
+  import("@/features/site-audit/SiteAuditPage").then((m) => ({
+    default: m.SiteAuditPage,
+  })),
+);
+const AiVisibilityPage = lazy(() =>
+  import("@/features/ai-visibility/AiVisibilityPage").then((m) => ({
+    default: m.AiVisibilityPage,
+  })),
+);
 const DemoLayout = lazy(() =>
   import("@/features/demo/DemoPages").then((m) => ({
     default: m.DemoLayout,
@@ -228,6 +238,8 @@ export const router = createBrowserRouter(
                 { path: "links", element: <CompetitorsLinksPage /> },
               ],
             },
+            { path: "/site-audit", element: <SiteAuditPage /> },
+            { path: "/ai-visibility", element: <AiVisibilityPage /> },
             { path: "/sync-runs", element: <SyncRunsPage /> },
             { path: "/system", element: <SystemPage /> },
             { path: "/settings/security", element: <SecuritySettingsPage /> },

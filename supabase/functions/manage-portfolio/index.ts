@@ -8,11 +8,15 @@ import { json } from "../_shared/response.ts";
 import { requireAdminMfa } from "../_shared/auth.ts";
 import { normalizeError } from "../_shared/errors.ts";
 import {
+  MAX_AI_PROMPTS_PER_SITE,
   MAX_COMPETITOR_DOMAINS_PER_SITE,
   MAX_TRACKED_QUERIES_PER_SITE,
   MAX_TRACKED_RANK_KEYWORDS_PER_SITE,
+  parseAiObservationInput,
+  parseAiPromptInput,
   parseCompetitorDomainInput,
   parseRankObservationInput,
+  parseRemoveAiPromptInput,
   parseRemoveCompetitorDomainInput,
   parseRemoveTrackedRankKeywordInput,
   parseSerpObservationInput,
@@ -295,6 +299,76 @@ Deno.serve(async (req) => {
         .delete()
         .eq("site_id", parsed.value.siteId)
         .eq("domain", parsed.value.domain);
+      if (error) throw error;
+      return json(200, { ok: true }, cors);
+    }
+
+    // AI Visibility prompts (Phase 8) -----------------------------------------
+    if (action === "ai-prompt.add") {
+      const parsed = parseAiPromptInput(body?.prompt);
+      if (!parsed.ok) return validationError(parsed.error, cors);
+      const input = parsed.value;
+
+      const { count, error: countError } = await admin
+        .from("ai_visibility_prompts")
+        .select("id", { count: "exact", head: true })
+        .eq("site_id", input.siteId);
+      if (countError) throw countError;
+      if ((count ?? 0) >= MAX_AI_PROMPTS_PER_SITE) {
+        return json(
+          409,
+          {
+            ok: false,
+            error: "limit_reached",
+            message: `A site may track at most ${MAX_AI_PROMPTS_PER_SITE} AI-visibility prompts.`,
+          },
+          cors,
+        );
+      }
+
+      const { error } = await admin.from("ai_visibility_prompts").insert({
+        site_id: input.siteId,
+        prompt_text: input.promptText,
+        category: input.category,
+        source_query: input.sourceQuery,
+      });
+      if (error) throw error;
+      return json(200, { ok: true }, cors);
+    }
+
+    if (action === "ai-prompt.remove") {
+      const parsed = parseRemoveAiPromptInput(body?.prompt);
+      if (!parsed.ok) return validationError(parsed.error, cors);
+      const { error } = await admin
+        .from("ai_visibility_prompts")
+        .delete()
+        .eq("id", parsed.value.id);
+      if (error) throw error;
+      return json(200, { ok: true }, cors);
+    }
+
+    // A manual/on-demand AI-visibility test result - the zero-cost source of
+    // truth for every source in CLAUDE.md's "AI Search source coverage" list
+    // that doesn't expose a free per-site query/citation API (i.e. all of
+    // them except Google's own GSC search-appearance data). Always inserted,
+    // never updated - history is never overwritten.
+    if (action === "ai-observation.record") {
+      const parsed = parseAiObservationInput(body?.observation);
+      if (!parsed.ok) return validationError(parsed.error, cors);
+      const input = parsed.value;
+
+      const { error } = await admin.from("ai_visibility_observations").insert({
+        site_id: input.siteId,
+        prompt_id: input.promptId,
+        prompt_text: input.promptText,
+        source: input.source,
+        is_cited: input.isCited,
+        cited_url: input.citedUrl,
+        competitor_domain: input.competitorDomain,
+        country: input.country,
+        device: input.device,
+        notes: input.notes,
+      });
       if (error) throw error;
       return json(200, { ok: true }, cors);
     }

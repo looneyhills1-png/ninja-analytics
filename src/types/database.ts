@@ -19,6 +19,20 @@ export type SyncStatus = "running" | "success" | "partial" | "failed";
 export type TriggerType = "scheduled" | "manual" | "backfill";
 export type RankDevice = "desktop" | "mobile";
 export type RankSnapshotSource = "manual" | "observed_serp";
+export type AiVisibilitySource =
+  | "chatgpt"
+  | "gemini"
+  | "copilot"
+  | "claude"
+  | "siri"
+  | "alexa"
+  | "yahoo"
+  | "duckduckgo"
+  | "brave"
+  | "ecosia"
+  | "dogpile"
+  | "perplexity"
+  | "other";
 
 export interface Database {
   public: {
@@ -574,6 +588,270 @@ export interface Database {
         >;
         Relationships: [];
       };
+      site_audit_runs: {
+        Row: {
+          id: string;
+          site_id: string;
+          started_at: string;
+          finished_at: string | null;
+          status: "running" | "success" | "failed";
+          pages_crawled: number;
+          health_score: number | null;
+          errors_count: number;
+          warnings_count: number;
+          notices_count: number;
+          error_message: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: "running" | "success" | "failed";
+          pages_crawled?: number;
+          health_score?: number | null;
+          errors_count?: number;
+          warnings_count?: number;
+          notices_count?: number;
+          error_message?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["site_audit_runs"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "site_audit_runs_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      site_audit_pages: {
+        Row: {
+          id: string;
+          run_id: string;
+          site_id: string;
+          url: string;
+          status_code: number | null;
+          is_redirect: boolean;
+          redirect_target: string | null;
+          canonical_url: string | null;
+          is_self_canonical: boolean | null;
+          meta_robots_noindex: boolean;
+          title: string | null;
+          title_length: number | null;
+          meta_description: string | null;
+          meta_description_length: number | null;
+          h1_count: number | null;
+          h2_count: number | null;
+          word_count: number | null;
+          internal_link_count: number | null;
+          external_link_count: number | null;
+          images_total: number | null;
+          images_missing_alt: number | null;
+          has_schema: boolean;
+          has_viewport_meta: boolean;
+          has_opengraph: boolean;
+          has_hreflang: boolean;
+          has_pagination: boolean;
+          content_hash: string | null;
+          crawl_depth: number | null;
+          in_sitemap: boolean;
+          discovered_from: "crawl" | "sitemap" | null;
+          response_time_ms: number | null;
+        };
+        Insert: {
+          id?: string;
+          run_id: string;
+          site_id: string;
+          url: string;
+          status_code?: number | null;
+          is_redirect?: boolean;
+          redirect_target?: string | null;
+          canonical_url?: string | null;
+          is_self_canonical?: boolean | null;
+          meta_robots_noindex?: boolean;
+          title?: string | null;
+          title_length?: number | null;
+          meta_description?: string | null;
+          meta_description_length?: number | null;
+          h1_count?: number | null;
+          h2_count?: number | null;
+          word_count?: number | null;
+          internal_link_count?: number | null;
+          external_link_count?: number | null;
+          images_total?: number | null;
+          images_missing_alt?: number | null;
+          has_schema?: boolean;
+          has_viewport_meta?: boolean;
+          has_opengraph?: boolean;
+          has_hreflang?: boolean;
+          has_pagination?: boolean;
+          content_hash?: string | null;
+          crawl_depth?: number | null;
+          in_sitemap?: boolean;
+          discovered_from?: "crawl" | "sitemap" | null;
+          response_time_ms?: number | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["site_audit_pages"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "site_audit_pages_run_id_fkey";
+            columns: ["run_id"];
+            referencedRelation: "site_audit_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      site_audit_issues: {
+        Row: {
+          id: string;
+          run_id: string;
+          site_id: string;
+          url: string | null;
+          severity: "error" | "warning" | "notice";
+          category: string;
+          code: string;
+          message: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          run_id: string;
+          site_id: string;
+          url?: string | null;
+          severity: "error" | "warning" | "notice";
+          category: string;
+          code: string;
+          message: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["site_audit_issues"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "site_audit_issues_run_id_fkey";
+            columns: ["run_id"];
+            referencedRelation: "site_audit_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      search_appearance_daily: {
+        Row: {
+          site_id: string;
+          engine: SearchEngine;
+          metric_date: string;
+          search_appearance: string;
+          clicks: number;
+          impressions: number;
+          ctr: number | null;
+          average_position: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          site_id: string;
+          engine: SearchEngine;
+          metric_date: string;
+          search_appearance: string;
+          clicks?: number;
+          impressions?: number;
+          ctr?: number | null;
+          average_position?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["search_appearance_daily"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "search_appearance_daily_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_visibility_prompts: {
+        Row: {
+          id: string;
+          site_id: string;
+          prompt_text: string;
+          category: "observed" | "generated";
+          source_query: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          prompt_text: string;
+          category: "observed" | "generated";
+          source_query?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["ai_visibility_prompts"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "ai_visibility_prompts_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_visibility_observations: {
+        Row: {
+          id: string;
+          site_id: string;
+          prompt_id: string | null;
+          prompt_text: string;
+          source: AiVisibilitySource;
+          observed_at: string;
+          is_cited: boolean | null;
+          cited_url: string | null;
+          competitor_domain: string | null;
+          country: string | null;
+          device: RankDevice | null;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          prompt_id?: string | null;
+          prompt_text: string;
+          source: AiVisibilitySource;
+          observed_at?: string;
+          is_cited?: boolean | null;
+          cited_url?: string | null;
+          competitor_domain?: string | null;
+          country?: string | null;
+          device?: RankDevice | null;
+          notes?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["ai_visibility_observations"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "ai_visibility_observations_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_visibility_observations_prompt_id_fkey";
+            columns: ["prompt_id"];
+            referencedRelation: "ai_visibility_prompts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<never, never>;
     Functions: {
@@ -621,3 +899,9 @@ export type UptimeCheck = Tables<"uptime_checks">;
 export type TrackedRankKeyword = Tables<"tracked_rank_keywords">;
 export type CommonCrawlRun = Tables<"common_crawl_runs">;
 export type CommonCrawlPage = Tables<"common_crawl_pages">;
+export type SiteAuditRun = Tables<"site_audit_runs">;
+export type SiteAuditPage = Tables<"site_audit_pages">;
+export type SiteAuditIssue = Tables<"site_audit_issues">;
+export type SearchAppearanceDaily = Tables<"search_appearance_daily">;
+export type AiVisibilityPrompt = Tables<"ai_visibility_prompts">;
+export type AiVisibilityObservation = Tables<"ai_visibility_observations">;

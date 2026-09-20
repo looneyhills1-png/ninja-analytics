@@ -14,6 +14,9 @@ import {
   type PortfolioExportComputed,
 } from "@/lib/portfolio-export";
 import type {
+  AiVisibilityObservation,
+  AiVisibilityPrompt,
+  AiVisibilitySource,
   AnalyticsDaily,
   CommonCrawlPage,
   CommonCrawlRun,
@@ -22,11 +25,15 @@ import type {
   ObservedSerpResult,
   RankDevice,
   RankSnapshot,
+  SearchAppearanceDaily,
   SearchDaily,
   SearchEngine,
   SearchPageDaily,
   SearchQueryDaily,
   Site,
+  SiteAuditIssue,
+  SiteAuditPage,
+  SiteAuditRun,
   SyncRun,
   SyncSource,
   SyncStatus,
@@ -1188,5 +1195,172 @@ export async function triggerCommonCrawlSync(
     "common-crawl-sync",
     { domain },
     "Could not sync Common Crawl data for this domain.",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Site Audit (CLAUDE.md Phase 5)
+// ---------------------------------------------------------------------------
+
+export async function getSiteAuditRuns(
+  siteId: string,
+): Promise<SiteAuditRun[]> {
+  const { data, error } = await supabase
+    .from("site_audit_runs")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("started_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getSiteAuditIssues(
+  runId: string,
+): Promise<SiteAuditIssue[]> {
+  return fetchAllPages<SiteAuditIssue>(() =>
+    supabase
+      .from("site_audit_issues")
+      .select("*")
+      .eq("run_id", runId)
+      .order("severity"),
+  );
+}
+
+export async function getSiteAuditPages(
+  runId: string,
+): Promise<SiteAuditPage[]> {
+  return fetchAllPages<SiteAuditPage>(() =>
+    supabase
+      .from("site_audit_pages")
+      .select("*")
+      .eq("run_id", runId)
+      .order("url"),
+  );
+}
+
+export interface SiteAuditResult {
+  ok: boolean;
+  runId: string;
+  pagesCrawled: number;
+  healthScore: number;
+  errorsCount: number;
+  warningsCount: number;
+  noticesCount: number;
+}
+
+/** On-demand only - never scheduled. See supabase/functions/site-audit-crawl. */
+export async function triggerSiteAudit(
+  siteId: string,
+): Promise<SiteAuditResult> {
+  return invokeFunction<SiteAuditResult>(
+    "site-audit-crawl",
+    { siteId },
+    "Could not run the site audit.",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AI Visibility (CLAUDE.md Phase 8 / "AI Search source coverage")
+// ---------------------------------------------------------------------------
+
+/** GSC's search-appearance breakdown - the one platform in the AI Search
+ * source coverage list with any webmaster-exposed data (see
+ * lib/ai-search-sources.ts). Google hasn't published a fixed enum for AI
+ * features, so every value GSC returns is fetched verbatim. */
+export async function getSearchAppearanceDaily(
+  siteId: string,
+  days: number,
+): Promise<SearchAppearanceDaily[]> {
+  const since = format(subDays(new Date(), days * 2), "yyyy-MM-dd");
+  return fetchAllPages<SearchAppearanceDaily>(() =>
+    supabase
+      .from("search_appearance_daily")
+      .select("*")
+      .eq("site_id", siteId)
+      .eq("engine", "google")
+      .gte("metric_date", since)
+      .order("metric_date"),
+  );
+}
+
+export async function getAiVisibilityPrompts(
+  siteId: string,
+): Promise<AiVisibilityPrompt[]> {
+  const { data, error } = await supabase
+    .from("ai_visibility_prompts")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("created_at");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface AiPromptFormValues {
+  siteId: string;
+  promptText: string;
+  category: "observed" | "generated";
+  sourceQuery: string | null;
+}
+
+export async function addAiVisibilityPrompt(
+  values: AiPromptFormValues,
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    {
+      action: "ai-prompt.add",
+      prompt: {
+        siteId: values.siteId,
+        promptText: values.promptText,
+        category: values.category,
+        sourceQuery: values.sourceQuery,
+      },
+    },
+    "Could not save the prompt.",
+  );
+}
+
+export async function removeAiVisibilityPrompt(id: string): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    { action: "ai-prompt.remove", prompt: { id } },
+    "Could not remove the prompt.",
+  );
+}
+
+export async function getAiVisibilityObservations(
+  siteId: string,
+): Promise<AiVisibilityObservation[]> {
+  return fetchAllPages<AiVisibilityObservation>(() =>
+    supabase
+      .from("ai_visibility_observations")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("observed_at"),
+  );
+}
+
+export interface AiObservationInput {
+  siteId: string;
+  promptId: string | null;
+  promptText: string;
+  source: AiVisibilitySource;
+  isCited: boolean | null;
+  citedUrl: string | null;
+  competitorDomain: string | null;
+  country: string | null;
+  device: "desktop" | "mobile" | null;
+  notes: string | null;
+}
+
+/** Always inserts a new row - a manual test result is never overwritten. */
+export async function recordAiVisibilityObservation(
+  input: AiObservationInput,
+): Promise<void> {
+  await invokeFunction(
+    "manage-portfolio",
+    { action: "ai-observation.record", observation: input },
+    "Could not record the observation.",
   );
 }

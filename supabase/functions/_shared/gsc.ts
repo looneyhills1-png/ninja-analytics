@@ -153,6 +153,31 @@ export const gscAdapter: SyncAdapter = async ({
     failed.push("query_page");
   }
 
+  // --- Best-effort: search appearance (CLAUDE.md Phase 8 / "AI Search
+  // source coverage" - "GSC Generative AI features data where exposed").
+  // Google has not published a fixed enum of searchAppearance values for AI
+  // features, so every value GSC returns is stored verbatim; the UI applies
+  // a heuristic "looks AI-related" filter rather than assuming a name.
+  try {
+    const written = await syncBreakdown(
+      admin,
+      "search_appearance_daily",
+      "search_appearance",
+      await queryGsc(token, property, {
+        startDate,
+        endDate,
+        dimensions: ["date", "searchAppearance"],
+        rowLimit: BREAKDOWN_ROW_LIMIT,
+      }),
+      site.id,
+      updatedAt,
+    );
+    rowsFetched += written.fetched;
+    rowsWritten += written.written;
+  } catch {
+    failed.push("search_appearance");
+  }
+
   return {
     rowsFetched,
     rowsWritten,
@@ -165,8 +190,8 @@ export const gscAdapter: SyncAdapter = async ({
 
 async function syncBreakdown(
   admin: SupabaseClient,
-  table: "search_query_daily" | "search_page_daily",
-  keyColumn: "query" | "page",
+  table: "search_query_daily" | "search_page_daily" | "search_appearance_daily",
+  keyColumn: "query" | "page" | "search_appearance",
   apiRows: GscApiRow[],
   siteId: string,
   updatedAt: string,

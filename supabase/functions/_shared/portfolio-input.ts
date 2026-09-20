@@ -329,3 +329,170 @@ export function parseRemoveCompetitorDomainInput(
     value: { siteId: b.siteId, domain: normalizeDomain(b.domain) },
   };
 }
+
+// AI Visibility (Phase 8 / "AI Search source coverage") ----------------------
+
+export const MAX_AI_PROMPTS_PER_SITE = 60;
+
+export type AiPromptCategory = "observed" | "generated";
+export type AiVisibilitySource =
+  | "chatgpt"
+  | "gemini"
+  | "copilot"
+  | "claude"
+  | "siri"
+  | "alexa"
+  | "yahoo"
+  | "duckduckgo"
+  | "brave"
+  | "ecosia"
+  | "dogpile"
+  | "perplexity"
+  | "other";
+
+const AI_SOURCES: AiVisibilitySource[] = [
+  "chatgpt",
+  "gemini",
+  "copilot",
+  "claude",
+  "siri",
+  "alexa",
+  "yahoo",
+  "duckduckgo",
+  "brave",
+  "ecosia",
+  "dogpile",
+  "perplexity",
+  "other",
+];
+
+export interface AiPromptInput {
+  siteId: string;
+  promptText: string;
+  category: AiPromptCategory;
+  sourceQuery: string | null;
+}
+
+export function parseAiPromptInput(body: unknown): ParseResult<AiPromptInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.siteId)) {
+    return { ok: false, error: "siteId must be a valid UUID" };
+  }
+  const promptText =
+    typeof b.promptText === "string" ? b.promptText.trim() : "";
+  if (promptText.length < 1 || promptText.length > 500) {
+    return { ok: false, error: "promptText must be 1-500 characters" };
+  }
+  if (b.category !== "observed" && b.category !== "generated") {
+    return { ok: false, error: "category must be observed or generated" };
+  }
+  const sourceQuery = optionalTrimmedString(b.sourceQuery, 200);
+  if (!sourceQuery.ok) {
+    return { ok: false, error: `sourceQuery: ${sourceQuery.error}` };
+  }
+  return {
+    ok: true,
+    value: {
+      siteId: b.siteId,
+      promptText,
+      category: b.category,
+      sourceQuery: sourceQuery.value,
+    },
+  };
+}
+
+export interface RemoveAiPromptInput {
+  id: string;
+}
+
+export function parseRemoveAiPromptInput(
+  body: unknown,
+): ParseResult<RemoveAiPromptInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.id)) return { ok: false, error: "id must be a valid UUID" };
+  return { ok: true, value: { id: b.id } };
+}
+
+export interface AiObservationInput {
+  siteId: string;
+  promptId: string | null;
+  promptText: string;
+  source: AiVisibilitySource;
+  isCited: boolean | null;
+  citedUrl: string | null;
+  competitorDomain: string | null;
+  country: string | null;
+  device: "desktop" | "mobile" | null;
+  notes: string | null;
+}
+
+export function parseAiObservationInput(
+  body: unknown,
+): ParseResult<AiObservationInput> {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+  if (!isUuid(b.siteId)) {
+    return { ok: false, error: "siteId must be a valid UUID" };
+  }
+  let promptId: string | null = null;
+  if (b.promptId != null) {
+    if (!isUuid(b.promptId)) {
+      return { ok: false, error: "promptId must be a valid UUID or null" };
+    }
+    promptId = b.promptId;
+  }
+  const promptText =
+    typeof b.promptText === "string" ? b.promptText.trim() : "";
+  if (promptText.length < 1 || promptText.length > 500) {
+    return { ok: false, error: "promptText must be 1-500 characters" };
+  }
+  if (
+    typeof b.source !== "string" ||
+    !AI_SOURCES.includes(b.source as AiVisibilitySource)
+  ) {
+    return {
+      ok: false,
+      error: `source must be one of ${AI_SOURCES.join(", ")}`,
+    };
+  }
+  if (b.isCited != null && typeof b.isCited !== "boolean") {
+    return { ok: false, error: "isCited must be a boolean or null" };
+  }
+  const citedUrl = parseOptionalUrl(b.citedUrl);
+  if (!citedUrl.ok) return { ok: false, error: `citedUrl: ${citedUrl.error}` };
+  const competitorDomain = optionalTrimmedString(b.competitorDomain, 253);
+  if (!competitorDomain.ok) {
+    return { ok: false, error: `competitorDomain: ${competitorDomain.error}` };
+  }
+  const country = optionalTrimmedString(b.country, 10);
+  if (!country.ok) return { ok: false, error: `country: ${country.error}` };
+  if (b.device != null && b.device !== "desktop" && b.device !== "mobile") {
+    return { ok: false, error: "device must be desktop, mobile, or null" };
+  }
+  const notes = optionalTrimmedString(b.notes, 500);
+  if (!notes.ok) return { ok: false, error: `notes: ${notes.error}` };
+
+  return {
+    ok: true,
+    value: {
+      siteId: b.siteId,
+      promptId,
+      promptText,
+      source: b.source as AiVisibilitySource,
+      isCited: (b.isCited as boolean | null) ?? null,
+      citedUrl: citedUrl.value,
+      competitorDomain: competitorDomain.value,
+      country: country.value,
+      device: (b.device as "desktop" | "mobile" | null) ?? null,
+      notes: notes.value,
+    },
+  };
+}
