@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { Wand2 } from "lucide-react";
-import { useKeywordOpportunities, useSites } from "@/lib/hooks";
+import { useCommonCrawlPages, useKeywordOpportunities, useSites } from "@/lib/hooks";
 import { usePrivacyMode } from "@/lib/privacy";
 import type { KeywordsOutletContext } from "@/features/keywords/KeywordsLayout";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,11 @@ import { OpportunityBadgeList } from "@/features/keywords/OpportunityBadges";
 import { ScoreBar, ScoreFactorList } from "@/features/keywords/ScoreBar";
 import { FixPromptModal } from "@/features/keywords/FixPromptModal";
 import { buildFixPrompt } from "@/features/keywords/generateFixPrompt";
+import { diagnoseOpportunity } from "@/features/keywords/opportunity-diagnosis";
+import {
+  findInternalLinkOpportunities,
+  type InternalLinkSuggestion,
+} from "@/features/keywords/internal-link-engine";
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -59,6 +64,11 @@ export function KeywordsOpportunitiesPage() {
   // domain/name for the generated prompt, not a second network request.
   const sitesQuery = useSites();
   const site = sitesQuery.data?.find((s) => s.id === siteId);
+  // Internal Link Engine (Phase 2) - existing page inventory for this
+  // domain, already synced by the (separate, on-demand) Common Crawl sync.
+  // No new fetch here; if it hasn't been synced yet, suggestions are
+  // honestly reported as "not analysed" rather than guessed.
+  const commonCrawlQuery = useCommonCrawlPages(site?.domain ?? "");
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("score");
@@ -89,6 +99,33 @@ export function KeywordsOpportunitiesPage() {
     }
     return [...out].sort((a, b) => SORTERS[sortKey](b) - SORTERS[sortKey](a));
   }, [rows, category, search, sortKey]);
+
+  // "Prefer pages with existing search visibility/authority where
+  // available" - every ranking URL already seen among this site's own
+  // opportunities is real, already-computed evidence of visibility, not a
+  // new fetch or an invented authority score.
+  const searchVisibleUrls = useMemo(
+    () =>
+      new Set(rows.map((r) => r.rankingUrl).filter((u): u is string => !!u)),
+    [rows],
+  );
+
+  // undefined = not analysed (no target URL, or the page inventory hasn't
+  // loaded/synced yet) - rendered as an honest "not analysed" message, never
+  // as zero relevant pages.
+  function suggestionsFor(
+    row: KeywordOpportunityRow,
+  ): InternalLinkSuggestion[] | undefined {
+    if (!row.rankingUrl) return undefined;
+    const pages = commonCrawlQuery.data;
+    if (!pages) return undefined;
+    return findInternalLinkOpportunities({
+      targetUrl: row.rankingUrl,
+      targetQuery: row.query,
+      candidatePages: pages.filter((p) => p.is_active),
+      pagesWithSearchVisibility: searchVisibleUrls,
+    });
+  }
 
   if (opportunitiesQuery.isLoading) return <Skeleton className="h-96" />;
   if (opportunitiesQuery.isError)
@@ -185,7 +222,9 @@ export function KeywordsOpportunitiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
+                {filtered.map((row) => {
+                  const diagnosis = diagnoseOpportunity(row);
+                  return (
                   <Fragment key={row.query}>
                     <tr
                       className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
@@ -260,10 +299,25 @@ export function KeywordsOpportunitiesPage() {
                           <div className="grid gap-4 md:grid-cols-2">
                             <div>
                               <p className="mb-1 text-xs font-semibold">
-                                Recommended action
+                                Measurable problem
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {row.recommendedAction}
+                                {diagnosis.seoWeakness}
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {diagnosis.ctrWeakness}
+                              </p>
+                              <p className="mb-1 mt-3 text-xs font-semibold">
+                                Already working - preserve this
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {diagnosis.preserve}
+                              </p>
+                              <p className="mb-1 mt-3 text-xs font-semibold">
+                                Recommended priority action
+                              </p>
+                              <p className="text-sm font-medium text-foreground">
+                                {diagnosis.priorityAction}
                               </p>
                               {row.competingUrls.length >= 2 && (
                                 <div className="mt-2">
@@ -287,11 +341,26 @@ export function KeywordsOpportunitiesPage() {
                               <ScoreFactorList score={row.score} />
                             </div>
                           </div>
+                          <InternalLinkOpportunitiesPanel
+                            suggestions={suggestionsFor(row)}
+                            maskUrl={(u) => privacy.maskText(u, `kw-opp-link:${u}`)}
+                          />
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setFixPromptRow(row)}
+                              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                            >
+                              <Wand2 className="h-3 w-3" />
+                              Generate Fix Prompt
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}
                   </Fragment>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -307,9 +376,79 @@ export function KeywordsOpportunitiesPage() {
               name: site?.name ?? "this site",
             },
             fixPromptRow,
+            suggestionsFor(fixPromptRow),
           )}
           onClose={() => setFixPromptRow(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phase 2, Internal Link Engine - shown inside each expanded opportunity.
+ * undefined suggestions = not analysed yet (no page inventory synced, or no
+ * target URL); an empty array = genuinely analysed and nothing relevant
+ * found. Never invents a link status - see internal-link-engine.ts.
+ */
+function InternalLinkOpportunitiesPanel({
+  suggestions,
+  maskUrl,
+}: {
+  suggestions: InternalLinkSuggestion[] | undefined;
+  maskUrl: (url: string) => string;
+}) {
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <p className="mb-1 text-xs font-semibold">
+        Internal link opportunities
+      </p>
+      {suggestions === undefined ? (
+        <p className="text-xs text-muted-foreground">
+          Not analysed - sync this site&apos;s page inventory (Competitors
+          &rarr; Historical Pages) to enable suggestions, or this query has
+          no ranking URL to link to.
+        </p>
+      ) : suggestions.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No genuinely relevant existing page found - nothing is suggested
+          rather than linking from an unrelated page.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1 pr-2 font-medium">Source page</th>
+                <th className="py-1 pr-2 font-medium">Suggested anchor</th>
+                <th className="py-1 pr-2 font-medium">Reason / relevance</th>
+                <th className="py-1 pr-2 font-medium">Visibility</th>
+                <th className="py-1 pr-2 font-medium">Existing link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suggestions.map((s) => (
+                <tr key={s.sourceUrl} className="border-t border-border/60">
+                  <td className="max-w-[14rem] truncate py-1 pr-2">
+                    {maskUrl(s.sourceUrl)}
+                  </td>
+                  <td className="max-w-[10rem] truncate py-1 pr-2">
+                    {s.suggestedAnchor}
+                  </td>
+                  <td className="max-w-[12rem] truncate py-1 pr-2 text-muted-foreground">
+                    {s.matchedTerms.join(", ")}
+                  </td>
+                  <td className="py-1 pr-2 text-muted-foreground">
+                    {s.hasSearchVisibility ? "Ranks already" : "Unknown"}
+                  </td>
+                  <td className="py-1 pr-2 text-muted-foreground">
+                    Not inspected
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

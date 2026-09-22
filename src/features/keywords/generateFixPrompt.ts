@@ -14,11 +14,21 @@
 // monetisation. Every generated prompt now evaluates three goals together -
 // SEO improvement, user value/content quality, and AdSense readiness - see
 // sections 3 ("Diagnosis") and 5 ("User-value improvements") below.
+//
+// The diagnosis itself (measurable problem / what to preserve / priority
+// action) lives in opportunity-diagnosis.ts, shared with the Opportunities
+// page's own expanded-row display so the two never say different things
+// about the same row. Internal-link suggestions (Phase 2, Internal Link
+// Engine) are computed by the caller (internal-link-engine.ts, which needs
+// the site's page inventory the caller already has loaded) and passed in -
+// this file stays a pure function of data it's handed, never fetching
+// anything itself.
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
 } from "@/features/keywords/opportunity-meta";
-import { expectedCtrForPosition } from "@/lib/opportunity-score";
+import { diagnoseOpportunity } from "@/features/keywords/opportunity-diagnosis";
+import type { InternalLinkSuggestion } from "@/features/keywords/internal-link-engine";
 import { formatCtr, formatNumber, formatPosition } from "@/lib/format";
 import type {
   KeywordOpportunityRow,
@@ -73,25 +83,6 @@ const CATEGORY_INSTRUCTIONS: Partial<Record<OpportunityCategory, string[]>> = {
     "Either improve targeting on this page, or consolidate/redirect to the page that's the correct match - don't create a near-duplicate.",
   ],
 };
-
-// A "good position, weak clicks" query is a CTR problem, not a content
-// problem - the ranking already proves relevance. MIN_IMPRESSIONS here
-// deliberately matches the engine's own "meaningful data" floor
-// (keyword-opportunities.ts's MIN_IMPRESSIONS_FOR_OPPORTUNITY) rather than
-// a new number, so this doesn't fire on noise.
-const CTR_FIRST_MIN_IMPRESSIONS = 10;
-const CTR_FIRST_MAX_POSITION = 10;
-
-function isCtrFirstCase(row: KeywordOpportunityRow): boolean {
-  const rankingWell =
-    row.currentPosition != null && row.currentPosition <= CTR_FIRST_MAX_POSITION;
-  const hasMeaningfulImpressions = row.impressions >= CTR_FIRST_MIN_IMPRESSIONS;
-  const effectivelyNoClicks = row.clicks === 0;
-  return (
-    row.categories.includes("high-impression-low-ctr") ||
-    (rankingWell && hasMeaningfulImpressions && effectivelyNoClicks)
-  );
-}
 
 function categoriesInOrder(
   categories: OpportunityCategory[],
@@ -155,87 +146,26 @@ function pageEvidenceSection(): string {
   ].join("\n");
 }
 
-const SEO_WEAKNESS_BY_CATEGORY: Partial<
-  Record<OpportunityCategory, (row: KeywordOpportunityRow) => string>
-> = {
-  "strike-now": (row) =>
-    `Ranking close to page 1 (position ${formatPosition(row.currentPosition)}) but not yet capturing page-1 visibility - relevance/authority signals are the likely gap.`,
-  "page-2": (row) =>
-    `On page 2 (position ${formatPosition(row.currentPosition)}) - needs a larger relevance/content push to reach page 1.`,
-  cannibalisation: (row) =>
-    `${row.competingUrls.length} internal pages are competing for this exact query, splitting relevance signals instead of consolidating them.`,
-  "content-decay": () =>
-    "Clicks have dropped sharply vs the previous period - likely a ranking loss, thinned internal links, or content going stale.",
-  "wrong-page": () =>
-    "The current ranking URL doesn't obviously match this query's wording - possible search-intent mismatch (weak heuristic - confirm by inspection).",
-  "ranking-url-changed": () =>
-    "The ranking URL changed recently - internal links pointing at the old URL may now be misdirected.",
-  falling: () =>
-    "Losing clicks recently without an obvious page-level cause yet identified from Search Console data alone.",
-  lost: () =>
-    "This query has stopped appearing - could be a ranking loss, a removed/redirected page, or seasonality.",
-};
-
-function seoWeaknessLine(
-  row: KeywordOpportunityRow,
-  categories: OpportunityCategory[],
-): string {
-  for (const category of categoriesInOrder(categories)) {
-    const fn = SEO_WEAKNESS_BY_CATEGORY[category];
-    if (fn) return fn(row);
-  }
-  return "No strong SEO ranking weakness identified from Search Console data alone.";
-}
-
-function ctrWeaknessLine(
-  row: KeywordOpportunityRow,
-  ctrFirst: boolean,
-): string {
-  if (ctrFirst) {
-    return `Ranking is already strong (position ${formatPosition(row.currentPosition)}) but CTR is effectively zero on ${formatNumber(row.impressions)} impressions - this is the primary measurable weakness right now.`;
-  }
-  if (row.ctr != null && row.currentPosition != null) {
-    const expected = expectedCtrForPosition(row.currentPosition);
-    const gap =
-      row.ctr < expected
-        ? " - below the typical rate for this position."
-        : " - in line with or above the typical rate for this position, not a CTR problem.";
-    return `Actual CTR ${formatCtr(row.ctr)} vs a typical ~${formatCtr(expected)} at this position${gap}`;
-  }
-  return "Not enough click/impression data to assess CTR.";
-}
-
-function preserveLine(row: KeywordOpportunityRow): string {
-  if (row.currentPosition != null && row.currentPosition <= 20) {
-    return `Already ranks at position ${formatPosition(row.currentPosition)} with ${formatNumber(row.impressions)} impressions - this existing visibility and relevance is real; preserve it, don't rewrite the page from scratch.`;
-  }
-  if (row.clicks > 0) {
-    return `Already receiving some clicks (${formatNumber(row.clicks)}) - whatever is working on the page now should be kept, not discarded in a full rewrite.`;
-  }
-  return "No strong existing signal identified from Search Console data alone - there may still be good content on the page; inspect before rewriting anything.";
-}
-
 function diagnosisSection(
   row: KeywordOpportunityRow,
-  categories: OpportunityCategory[],
-  ctrFirst: boolean,
 ): string {
+  const diagnosis = diagnoseOpportunity(row);
   return [
-    `- SEO weakness: ${seoWeaknessLine(row, categories)}`,
-    `- CTR weakness: ${ctrWeaknessLine(row, ctrFirst)}`,
+    `- SEO weakness: ${diagnosis.seoWeakness}`,
+    `- CTR weakness: ${diagnosis.ctrWeakness}`,
     "- User-value/content weakness: Not inspected / unavailable - assess against the user-value checklist in section 5 once you've opened the real page.",
     "- Monetisation-quality weakness: Not inspected / unavailable - assess against the AdSense-readiness guidance in section 5 once you've opened the real page.",
-    `- Already good (preserve, don't rewrite): ${preserveLine(row)}`,
+    `- Already good (preserve, don't rewrite): ${diagnosis.preserve}`,
   ].join("\n");
 }
 
 function recommendedImprovementsSection(
   row: KeywordOpportunityRow,
   categories: OpportunityCategory[],
-  ctrFirst: boolean,
 ): string {
+  const diagnosis = diagnoseOpportunity(row);
   const parts: string[] = [];
-  if (ctrFirst) {
+  if (diagnosis.ctrFirst) {
     parts.push(
       `CTR-first: this query already ranks around position ${formatPosition(row.currentPosition)} with ${formatNumber(row.impressions)} impressions and ${formatNumber(row.clicks)} clicks - the ranking itself is already strong enough that CTR is the primary measurable weakness. Focus first on title tag, meta description, and on-page summary/snippet clarity, plus clearer ticket intent and price/availability wording where verified. Avoid a large content rewrite unless it's independently justified below.`,
     );
@@ -243,6 +173,37 @@ function recommendedImprovementsSection(
   parts.push(row.recommendedAction);
   parts.push(implementationInstructionsSection(categories));
   return parts.join("\n\n");
+}
+
+// Phase 2, Internal Link Engine - suggestions are computed by the caller
+// (which has the site's page inventory loaded) and simply rendered here.
+// Every suggestion already carries its own honesty boundary
+// (existingLinkStatus is always "not-inspected" - this tool never fetches
+// live HTML to check), so this just formats what it's given.
+function internalLinkOpportunitiesSection(
+  suggestions: InternalLinkSuggestion[] | undefined,
+): string {
+  if (suggestions === undefined) {
+    return "Not analysed this run - no page inventory was available. Verify manually whether a relevant existing NinjaTickets page could link to this URL.";
+  }
+  if (suggestions.length === 0) {
+    return "No genuinely relevant existing page found in the current page inventory - do not add an internal link from an unrelated page just for SEO.";
+  }
+  return suggestions
+    .map((s, i) => {
+      const visibility = s.hasSearchVisibility
+        ? "yes - this source page already has its own Search Console visibility"
+        : "not known to rank for any tracked query";
+      return [
+        `${i + 1}. Source page: ${s.sourceUrl}${s.sourceTitle ? ` (${s.sourceTitle})` : ""}`,
+        `   Target page: ${s.targetUrl}`,
+        `   Suggested anchor: "${s.suggestedAnchor}" (derived from the URL - verify against the real page title before use)`,
+        `   Reason/relevance: shares real terms with this query/URL - ${s.matchedTerms.join(", ")}`,
+        `   Source page authority/visibility: ${visibility}`,
+        "   Existing link status: Not inspected / unavailable - live page content wasn't fetched this run; confirm no suitable link already exists before adding one.",
+      ].join("\n");
+    })
+    .join("\n\n");
 }
 
 const GENERAL_VALUE_AREAS = [
@@ -309,14 +270,18 @@ function safetyRulesSection(): string {
   ].join("\n");
 }
 
-/** Builds the full copy-paste prompt for a single opportunity row. */
+/** Builds the full copy-paste prompt for a single opportunity row.
+ * `internalLinkSuggestions` is optional (and computed by the caller, not
+ * here) - omit it entirely when no page inventory is loaded yet, or pass an
+ * empty array once genuinely analysed and found empty; the two render
+ * different, honest messages (see internalLinkOpportunitiesSection). */
 export function buildFixPrompt(
   site: FixPromptSite,
   row: KeywordOpportunityRow,
+  internalLinkSuggestions?: InternalLinkSuggestion[],
 ): string {
   const categories = categoriesInOrder(row.categories);
   const categoryLabels = categories.map((c) => CATEGORY_LABEL[c]).join(", ");
-  const ctrFirst = isCtrFirstCase(row);
 
   return `# NinjaTickets SEO fix prompt - keyword opportunity
 
@@ -343,17 +308,21 @@ ${competingUrlsSection(row)}
 ${pageEvidenceSection()}
 
 ## 3. Diagnosis
-${diagnosisSection(row, row.categories, ctrFirst)}
+${diagnosisSection(row)}
 
 ## 4. Recommended improvements
 Only evidence-based changes - do not act on anything not actually supported by the data above.
 
-${recommendedImprovementsSection(row, row.categories, ctrFirst)}
+${recommendedImprovementsSection(row, row.categories)}
 
 ## 5. User-value improvements
 ${userValueImprovementsSection()}
 
-## 6. Safety rules
+## 6. Internal link opportunities
+Analyse and recommend only - do not add these links yet.
+${internalLinkOpportunitiesSection(internalLinkSuggestions)}
+
+## 7. Safety rules
 ${safetyRulesSection()}
 `;
 }

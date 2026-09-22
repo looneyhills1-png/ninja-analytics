@@ -5,6 +5,7 @@ import {
   type QueryPageDailyRow,
 } from "@/lib/keyword-opportunities";
 import { buildFixPrompt } from "@/features/keywords/generateFixPrompt";
+import type { InternalLinkSuggestion } from "@/features/keywords/internal-link-engine";
 
 const SITE = { domain: "ninjatickets.com", name: "NinjaTickets" };
 
@@ -312,5 +313,84 @@ describe("buildFixPrompt", () => {
     expect(prompt).toContain(
       "If information cannot be verified, omit it or clearly mark it as unavailable.",
     );
+  });
+
+  it("includes internal-link suggestions when provided, honestly marked as not link-checked", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+    const suggestions: InternalLinkSuggestion[] = [
+      {
+        sourceUrl: "https://ninjatickets.com/things-to-do-in-london/",
+        sourceTitle: "Things to Do in London",
+        targetUrl: "/event/example/",
+        matchedTerms: ["london", "event"],
+        hasSearchVisibility: true,
+        relevanceScore: 3,
+        suggestedAnchor: "Example Event",
+        existingLinkStatus: "not-inspected",
+      },
+    ];
+
+    const prompt = buildFixPrompt(SITE, row, suggestions);
+
+    expect(prompt).toContain("Internal link opportunities");
+    expect(prompt).toContain(
+      "https://ninjatickets.com/things-to-do-in-london/",
+    );
+    expect(prompt).toContain('"Example Event"');
+    expect(prompt).toContain("london, event");
+    expect(prompt).toContain(
+      "this source page already has its own Search Console visibility",
+    );
+    expect(prompt).toContain(
+      "Not inspected / unavailable - live page content wasn't fetched this run",
+    );
+    expect(prompt).toContain(
+      "Analyse and recommend only - do not add these links yet.",
+    );
+  });
+
+  it("says no relevant page was found rather than suggesting an unrelated one", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+
+    const prompt = buildFixPrompt(SITE, row, []);
+
+    expect(prompt).toContain(
+      "No genuinely relevant existing page found in the current page inventory",
+    );
+    expect(prompt).toContain(
+      "do not add an internal link from an unrelated page just for SEO",
+    );
+  });
+
+  it("says internal links weren't analysed when no page inventory was passed at all", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+
+    const prompt = buildFixPrompt(SITE, row);
+
+    expect(prompt).toContain("Not analysed this run - no page inventory was available.");
   });
 });
