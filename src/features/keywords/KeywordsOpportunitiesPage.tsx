@@ -245,140 +245,145 @@ export function KeywordsOpportunitiesPage() {
                 {filtered.map((row) => {
                   const diagnosis = diagnoseOpportunity(row);
                   return (
-                  <Fragment key={row.query}>
-                    <tr
-                      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
-                      onClick={() =>
-                        setExpanded(expanded === row.query ? null : row.query)
-                      }
-                    >
-                      <td className="max-w-[14rem] truncate px-3 py-2">
-                        {privacy.maskText(row.query, `kw-opp:${row.query}`)}
-                      </td>
-                      <td className="max-w-[12rem] truncate px-2 py-2 text-xs text-muted-foreground">
-                        {row.rankingUrl
-                          ? privacy.maskText(
-                              row.rankingUrl,
-                              `kw-opp-url:${row.query}`,
-                            )
-                          : "-"}
-                      </td>
-                      <td className="px-2 py-2">
-                        <OpportunityBadgeList
-                          categories={row.categories}
-                          max={2}
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatPosition(row.currentPosition)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {row.positionChange == null
-                          ? "-"
-                          : `${row.positionChange > 0 ? "+" : ""}${row.positionChange.toFixed(1)}`}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatNumber(row.clicks)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                        {formatPercentChange(row.clicksChangePct)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                        {formatNumber(row.impressions)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                        {formatPercentChange(row.impressionsChangePct)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatCtr(row.ctr)}
-                      </td>
-                      <td className="px-2 py-2 text-[11px] text-muted-foreground">
-                        {row.firstSeen} &rarr; {row.lastSeen}
-                      </td>
-                      <td className="px-2 py-2">
-                        <ScoreBar score={row.score} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFixPromptRow(row);
-                          }}
-                          title="Generate Fix Prompt"
-                          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
-                        >
-                          <Wand2 className="h-3 w-3" />
-                          Fix
-                        </button>
-                      </td>
-                    </tr>
-                    {expanded === row.query && (
-                      <tr className="border-b border-border bg-muted/20 last:border-0">
-                        <td colSpan={13} className="px-4 py-3">
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                              <p className="mb-1 text-xs font-semibold">
-                                Measurable problem
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {diagnosis.seoWeakness}
-                              </p>
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                {diagnosis.ctrWeakness}
-                              </p>
-                              <p className="mb-1 mt-3 text-xs font-semibold">
-                                Already working - preserve this
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {diagnosis.preserve}
-                              </p>
-                              <p className="mb-1 mt-3 text-xs font-semibold">
-                                Recommended priority action
-                              </p>
-                              <p className="text-sm font-medium text-foreground">
-                                {diagnosis.priorityAction}
-                              </p>
-                              {row.competingUrls.length >= 2 && (
-                                <div className="mt-2">
-                                  <p className="text-xs font-semibold">
-                                    Competing URLs
-                                  </p>
-                                  <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                                    {row.competingUrls.map((u) => (
-                                      <li key={u} className="truncate">
-                                        {privacy.maskText(u, `kw-opp-cu:${u}`)}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <p className="mb-1 text-xs font-semibold">
-                                Why this score
-                              </p>
-                              <ScoreFactorList score={row.score} />
-                            </div>
-                          </div>
-                          <InternalLinkOpportunitiesPanel
-                            suggestions={suggestionsFor(row)}
-                            maskUrl={(u) => privacy.maskText(u, `kw-opp-link:${u}`)}
+                    <Fragment key={row.query}>
+                      <tr
+                        className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
+                        onClick={() =>
+                          setExpanded(expanded === row.query ? null : row.query)
+                        }
+                      >
+                        <td className="max-w-[14rem] truncate px-3 py-2">
+                          {privacy.maskText(row.query, `kw-opp:${row.query}`)}
+                        </td>
+                        <td className="max-w-[12rem] truncate px-2 py-2 text-xs text-muted-foreground">
+                          {row.rankingUrl
+                            ? privacy.maskText(
+                                row.rankingUrl,
+                                `kw-opp-url:${row.query}`,
+                              )
+                            : "-"}
+                        </td>
+                        <td className="px-2 py-2">
+                          <OpportunityBadgeList
+                            categories={row.categories}
+                            max={2}
                           />
-                          <div className="mt-3 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => setFixPromptRow(row)}
-                              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
-                            >
-                              <Wand2 className="h-3 w-3" />
-                              Generate Fix Prompt
-                            </button>
-                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatPosition(row.currentPosition)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {row.positionChange == null
+                            ? "-"
+                            : `${row.positionChange > 0 ? "+" : ""}${row.positionChange.toFixed(1)}`}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatNumber(row.clicks)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          {formatPercentChange(row.clicksChangePct)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          {formatNumber(row.impressions)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          {formatPercentChange(row.impressionsChangePct)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatCtr(row.ctr)}
+                        </td>
+                        <td className="px-2 py-2 text-[11px] text-muted-foreground">
+                          {row.firstSeen} &rarr; {row.lastSeen}
+                        </td>
+                        <td className="px-2 py-2">
+                          <ScoreBar score={row.score} />
+                        </td>
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFixPromptRow(row);
+                            }}
+                            title="Generate Fix Prompt"
+                            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                          >
+                            <Wand2 className="h-3 w-3" />
+                            Fix
+                          </button>
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
+                      {expanded === row.query && (
+                        <tr className="border-b border-border bg-muted/20 last:border-0">
+                          <td colSpan={13} className="px-4 py-3">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div>
+                                <p className="mb-1 text-xs font-semibold">
+                                  Measurable problem
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {diagnosis.seoWeakness}
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  {diagnosis.ctrWeakness}
+                                </p>
+                                <p className="mb-1 mt-3 text-xs font-semibold">
+                                  Already working - preserve this
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {diagnosis.preserve}
+                                </p>
+                                <p className="mb-1 mt-3 text-xs font-semibold">
+                                  Recommended priority action
+                                </p>
+                                <p className="text-sm font-medium text-foreground">
+                                  {diagnosis.priorityAction}
+                                </p>
+                                {row.competingUrls.length >= 2 && (
+                                  <div className="mt-2">
+                                    <p className="text-xs font-semibold">
+                                      Competing URLs
+                                    </p>
+                                    <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                      {row.competingUrls.map((u) => (
+                                        <li key={u} className="truncate">
+                                          {privacy.maskText(
+                                            u,
+                                            `kw-opp-cu:${u}`,
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="mb-1 text-xs font-semibold">
+                                  Why this score
+                                </p>
+                                <ScoreFactorList score={row.score} />
+                              </div>
+                            </div>
+                            <InternalLinkOpportunitiesPanel
+                              suggestions={suggestionsFor(row)}
+                              maskUrl={(u) =>
+                                privacy.maskText(u, `kw-opp-link:${u}`)
+                              }
+                            />
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setFixPromptRow(row)}
+                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                              >
+                                <Wand2 className="h-3 w-3" />
+                                Generate Fix Prompt
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -420,9 +425,7 @@ function InternalLinkOpportunitiesPanel({
 }) {
   return (
     <div className="mt-3 border-t border-border pt-3">
-      <p className="mb-1 text-xs font-semibold">
-        Internal link opportunities
-      </p>
+      <p className="mb-1 text-xs font-semibold">Internal link opportunities</p>
       {suggestions === undefined ? (
         <p className="text-xs text-muted-foreground">
           Not analysed - this site&apos;s current sitemap/search index

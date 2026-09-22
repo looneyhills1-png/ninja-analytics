@@ -131,9 +131,7 @@ describe("findInternalLinkOpportunities", () => {
     const other = suggestions.find((s) =>
       s.sourceUrl.includes("things-to-do-in-llandudno"),
     )!;
-    expect(visible.relevanceScore).toBeGreaterThanOrEqual(
-      other.relevanceScore,
-    );
+    expect(visible.relevanceScore).toBeGreaterThanOrEqual(other.relevanceScore);
   });
 
   it("caps suggestions at maxSuggestions to avoid excessive sitewide linking", () => {
@@ -272,9 +270,7 @@ describe("findInternalLinkOpportunities", () => {
 describe("naturalAnchorFromSlug", () => {
   it("collapses a repeated word from a real event slug (location as both prefix and suffix)", () => {
     expect(
-      naturalAnchorFromSlug(
-        "/event/llandudno-chocolate-experience-llandudno/",
-      ),
+      naturalAnchorFromSlug("/event/llandudno-chocolate-experience-llandudno/"),
     ).toBe("Llandudno Chocolate Experience");
   });
 

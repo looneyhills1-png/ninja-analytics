@@ -184,9 +184,7 @@ export function naturalAnchorFromSlug(urlOrPath: string): string {
     seen.add(key);
     deduped.push(w);
   }
-  return deduped
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return deduped.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 function pageTokens(page: CandidatePage): { all: Set<string>; url: Set<string> } {
