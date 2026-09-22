@@ -187,7 +187,10 @@ export function naturalAnchorFromSlug(urlOrPath: string): string {
   return deduped.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
-function pageTokens(page: CandidatePage): { all: Set<string>; url: Set<string> } {
+function pageTokens(page: CandidatePage): {
+  all: Set<string>;
+  url: Set<string>;
+} {
   const titleTokens = tokenize(page.title ?? "");
   const extraTokens = tokenize(page.extraText ?? "");
   const urlTokens = slugWords(page.url);

@@ -429,8 +429,7 @@ function InternalLinkOpportunitiesPanel({
       {suggestions === undefined ? (
         <p className="text-xs text-muted-foreground">
           Not analysed - this site&apos;s current sitemap/search index
-          hasn&apos;t loaded yet, or this query has no ranking URL to link
-          to.
+          hasn&apos;t loaded yet, or this query has no ranking URL to link to.
         </p>
       ) : suggestions.length === 0 ? (
         <p className="text-xs text-muted-foreground">

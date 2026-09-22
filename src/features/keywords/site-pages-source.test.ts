@@ -40,9 +40,7 @@ function mockFetchByUrl(
 ) {
   return vi.fn(async (input: string | URL) => {
     const url = typeof input === "string" ? input : input.toString();
-    const match = Object.entries(responses).find(([key]) =>
-      url.includes(key),
-    );
+    const match = Object.entries(responses).find(([key]) => url.includes(key));
     if (!match) {
       return { ok: false, status: 404 } as Response;
     }
@@ -81,7 +79,9 @@ describe("fetchSitePagesInventory", () => {
     expect(wicked?.extraText).toContain("London");
     expect(wicked?.source).toBe("search-index");
 
-    const home = result.pages.find((p) => p.url === "https://ninjatickets.com/");
+    const home = result.pages.find(
+      (p) => p.url === "https://ninjatickets.com/",
+    );
     expect(home?.source).toBe("sitemap");
     expect(home?.title).toBeNull();
 

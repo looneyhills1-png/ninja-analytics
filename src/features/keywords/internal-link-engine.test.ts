@@ -212,9 +212,9 @@ describe("findInternalLinkOpportunities", () => {
       bySource.get("https://ninjatickets.com/things-to-do-in-llandudno/")
         ?.sourceTitle,
     ).toBe("Things to Do in Llandudno (current)");
-    expect(
-      bySource.has("https://ninjatickets.com/llandudno-old-guide/"),
-    ).toBe(true);
+    expect(bySource.has("https://ninjatickets.com/llandudno-old-guide/")).toBe(
+      true,
+    );
   });
 
   it("reports targetLinkStatus honestly from the internal-link audit data, or not-verified when unavailable", () => {

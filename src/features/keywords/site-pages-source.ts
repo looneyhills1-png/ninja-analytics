@@ -53,10 +53,9 @@ async function fetchSitemapPages(domain: string): Promise<CandidatePage[]> {
 // city/category), so there's no separate file to fetch for that source.
 async function fetchSearchIndexPages(domain: string): Promise<CandidatePage[]> {
   try {
-    const res = await fetch(
-      `https://${domain}/assets/data/search-index.json`,
-      { mode: "cors" },
-    );
+    const res = await fetch(`https://${domain}/assets/data/search-index.json`, {
+      mode: "cors",
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as { entities?: SearchIndexEntity[] };
     const base = `https://${domain}`;
@@ -122,12 +121,11 @@ export interface SitePagesInventory {
 export async function fetchSitePagesInventory(
   domain: string,
 ): Promise<SitePagesInventory> {
-  const [sitemapPages, searchIndexPages, weaklyLinkedUrls] =
-    await Promise.all([
-      fetchSitemapPages(domain),
-      fetchSearchIndexPages(domain),
-      fetchWeaklyLinkedUrls(domain),
-    ]);
+  const [sitemapPages, searchIndexPages, weaklyLinkedUrls] = await Promise.all([
+    fetchSitemapPages(domain),
+    fetchSearchIndexPages(domain),
+    fetchWeaklyLinkedUrls(domain),
+  ]);
   const byUrl = new Map<string, CandidatePage>();
   for (const p of sitemapPages) byUrl.set(p.url, p);
   for (const p of searchIndexPages) byUrl.set(p.url, p);
