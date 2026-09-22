@@ -13,6 +13,7 @@ export interface KeywordsOutletContext {
 const TABS = [
   { to: "", label: "Overview" },
   { to: "opportunities", label: "Opportunities" },
+  { to: "ctr-optimizer", label: "CTR Optimizer" },
   { to: "rankings", label: "Rankings" },
   { to: "queries", label: "Queries" },
   { to: "pages", label: "Pages" },

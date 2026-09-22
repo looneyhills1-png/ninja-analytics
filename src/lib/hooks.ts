@@ -469,6 +469,27 @@ export function useSiteAuditPages(runId: string) {
   });
 }
 
+// The CTR Optimizer's real page-evidence source (Phase 3): the pages from
+// this site's most recent SUCCESSFUL site audit run, if one has ever been
+// run - no new fetch beyond the two queries below, both already used
+// elsewhere (Site Audit page). Returns undefined data (not an empty array)
+// until it's known whether a successful run exists at all, so callers can
+// tell "genuinely no audit yet" apart from "still loading".
+export function useLatestSiteAuditPages(siteId: string) {
+  const runsQuery = useSiteAuditRuns(siteId);
+  const latestSuccessfulRun = runsQuery.data?.find(
+    (r) => r.status === "success",
+  );
+  const pagesQuery = useSiteAuditPages(latestSuccessfulRun?.id ?? "");
+  return {
+    isLoading:
+      runsQuery.isLoading || (!!latestSuccessfulRun && pagesQuery.isLoading),
+    hasSuccessfulRun: !!latestSuccessfulRun,
+    runFinishedAt: latestSuccessfulRun?.finished_at ?? null,
+    pages: latestSuccessfulRun ? pagesQuery.data : undefined,
+  };
+}
+
 /** On-demand only - never scheduled. Bounded BFS crawl of the site's own
  * domain (see supabase/functions/site-audit-crawl). */
 export function useTriggerSiteAudit(siteId: string) {

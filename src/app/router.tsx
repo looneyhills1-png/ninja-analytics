@@ -58,6 +58,11 @@ const KeywordsOpportunitiesPage = lazy(() =>
     default: m.KeywordsOpportunitiesPage,
   })),
 );
+const CtrOptimizerPage = lazy(() =>
+  import("@/features/keywords/CtrOptimizerPage").then((m) => ({
+    default: m.CtrOptimizerPage,
+  })),
+);
 const KeywordsRankingsPage = lazy(() =>
   import("@/features/keywords/KeywordsRankingsPage").then((m) => ({
     default: m.KeywordsRankingsPage,
@@ -216,6 +221,7 @@ export const router = createBrowserRouter(
                   path: "opportunities",
                   element: <KeywordsOpportunitiesPage />,
                 },
+                { path: "ctr-optimizer", element: <CtrOptimizerPage /> },
                 { path: "rankings", element: <KeywordsRankingsPage /> },
                 { path: "queries", element: <KeywordsQueriesPage /> },
                 { path: "pages", element: <KeywordsPagesPage /> },

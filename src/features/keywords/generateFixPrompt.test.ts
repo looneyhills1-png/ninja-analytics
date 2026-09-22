@@ -6,6 +6,8 @@ import {
 } from "@/lib/keyword-opportunities";
 import { buildFixPrompt } from "@/features/keywords/generateFixPrompt";
 import type { InternalLinkSuggestion } from "@/features/keywords/internal-link-engine";
+import { findCtrOpportunities } from "@/features/keywords/ctr-optimizer";
+import type { SiteAuditPageEvidence } from "@/features/keywords/ctr-optimizer";
 
 const SITE = { domain: "ninjatickets.com", name: "NinjaTickets" };
 
@@ -403,5 +405,115 @@ describe("buildFixPrompt", () => {
     expect(prompt).toContain(
       "Not analysed this run - no page inventory was available.",
     );
+  });
+
+  it("adds a CTR Fix Prompt section with real numbers and diagnosis when a CTR opportunity is provided", () => {
+    const rows = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [
+        q("llandudno chocolate experience tickets", "2026-01-10", 0, 35, 5),
+      ],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp(
+          "llandudno chocolate experience tickets",
+          "/event/llandudno-chocolate-experience-llandudno/",
+          "2026-01-10",
+          0,
+          35,
+        ),
+      ],
+      days: 7,
+    });
+    const [row] = rows;
+
+    const [ctrOpportunity] = findCtrOpportunities({
+      rows,
+      pageEvidenceByUrl: new Map(),
+    });
+    expect(ctrOpportunity).toBeDefined();
+
+    const prompt = buildFixPrompt(SITE, row, undefined, ctrOpportunity);
+
+    expect(prompt).toContain("CTR opportunity diagnosis (Phase 3)");
+    expect(prompt).toContain("Actual CTR: 0.00%");
+    expect(prompt).toContain("Expected CTR:");
+    expect(prompt).toContain("CTR gap:");
+    expect(prompt).toContain("Estimated missed clicks:");
+    expect(prompt).toContain("title-clarity");
+    expect(prompt).toContain("title-intent-mismatch");
+    expect(prompt).toContain("weak-value-proposition");
+    expect(prompt).toContain("missing-ticket-context");
+    expect(prompt).toContain("vague-meta-description");
+    expect(prompt).toContain("poor-differentiation");
+    expect(prompt).toContain("snippet-rewrite-likely");
+    expect(prompt).toContain("Recommended change:");
+    expect(prompt).toContain("## 8. CTR-specific rules");
+    expect(prompt).toContain("Improve search-result appeal without clickbait.");
+    expect(prompt).toContain("Keep the title within a sensible SERP length");
+    expect(prompt).toContain(
+      "so Google is more likely to use the intended snippet",
+    );
+    // No site-audit evidence supplied for this row - still honestly marked.
+    expect(prompt).toContain("- Title: Not inspected / unavailable");
+  });
+
+  it("uses real captured title/meta from the last Site Audit crawl in the CTR Fix Prompt instead of 'Not inspected'", () => {
+    const rows = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("west end show tickets", "2026-01-10", 0, 40, 4)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp(
+          "west end show tickets",
+          "/event/west-end-show/",
+          "2026-01-10",
+          0,
+          40,
+        ),
+      ],
+      days: 7,
+    });
+    const [row] = rows;
+
+    const evidence: SiteAuditPageEvidence = {
+      title: "Home | NinjaTickets",
+      titleLength: 19,
+      metaDescription: null,
+      metaDescriptionLength: null,
+      h1Count: 1,
+    };
+    const [ctrOpportunity] = findCtrOpportunities({
+      rows,
+      pageEvidenceByUrl: new Map([["/event/west-end-show/", evidence]]),
+    });
+
+    const prompt = buildFixPrompt(SITE, row, undefined, ctrOpportunity);
+
+    expect(prompt).toContain('- Title: "Home | NinjaTickets"');
+    expect(prompt).toContain("from the last Site Audit crawl");
+    expect(prompt).toContain(
+      "- Meta description: Not captured by the last Site Audit crawl",
+    );
+    expect(prompt).toContain(
+      "H1: Not captured as text anywhere in this app (only a count is tracked: 1)",
+    );
+  });
+
+  it("never renders the CTR Fix Prompt section when no CTR opportunity is provided", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+
+    const prompt = buildFixPrompt(SITE, row);
+
+    expect(prompt).not.toContain("CTR opportunity diagnosis");
+    expect(prompt).not.toContain("## 8. CTR-specific rules");
   });
 });

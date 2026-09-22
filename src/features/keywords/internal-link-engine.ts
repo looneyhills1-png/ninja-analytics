@@ -21,6 +21,8 @@
 // only now - the engine works with zero Common Crawl data, using only the
 // site's own current pages. Two plain GETs (both public, already-served
 // static files, both fast - not "hundreds of pages" and not a crawler).
+import { pathOf } from "@/lib/url-path";
+import { tokenize } from "@/lib/text-tokens";
 
 /** A single candidate link-source page, from whichever source found it -
  * defined here (the scoring engine) and imported by site-pages-source.ts
@@ -91,72 +93,6 @@ export interface FindInternalLinkOpportunitiesInput {
 }
 
 const DEFAULT_MAX_SUGGESTIONS = 5;
-const MIN_TOKEN_LENGTH = 3;
-
-// Generic site/ticketing/English-filler words that appear on almost every
-// NinjaTickets page - excluded so two unrelated pages don't score as
-// "relevant" just because they both say "tickets" or "guide". Kept short
-// and specific to this site's own vocabulary, not a general NLP stopword
-// list.
-const STOPWORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "from",
-  "this",
-  "that",
-  "your",
-  "you",
-  "are",
-  "is",
-  "in",
-  "at",
-  "on",
-  "to",
-  "of",
-  "a",
-  "an",
-  "book",
-  "buy",
-  "find",
-  "best",
-  "top",
-  "guide",
-  "guides",
-  "things",
-  "do",
-  "near",
-  "tickets",
-  "ticket",
-  "event",
-  "events",
-  "ninjatickets",
-  "com",
-  "www",
-  "http",
-  "https",
-  "html",
-  "index",
-  "co",
-  "uk",
-]);
-
-function tokenize(text: string): string[] {
-  return (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
-    (t) => t.length >= MIN_TOKEN_LENGTH && !STOPWORDS.has(t),
-  );
-}
-
-/** Handles both an absolute URL and a bare path - page rows may carry
- * either depending on their source. */
-function pathOf(urlOrPath: string): string {
-  try {
-    return new URL(urlOrPath).pathname;
-  } catch {
-    return urlOrPath.startsWith("/") ? urlOrPath : `/${urlOrPath}`;
-  }
-}
 
 function slugWords(urlOrPath: string): string[] {
   return pathOf(urlOrPath)

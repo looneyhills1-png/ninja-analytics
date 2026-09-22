@@ -29,6 +29,7 @@ import {
 } from "@/features/keywords/opportunity-meta";
 import { diagnoseOpportunity } from "@/features/keywords/opportunity-diagnosis";
 import type { InternalLinkSuggestion } from "@/features/keywords/internal-link-engine";
+import type { CtrOpportunity } from "@/features/keywords/ctr-optimizer";
 import { formatCtr, formatNumber, formatPosition } from "@/lib/format";
 import type {
   KeywordOpportunityRow,
@@ -125,24 +126,82 @@ function implementationInstructionsSection(
 }
 
 // Nothing about the real page (title, content, schema, etc.) is fetched by
-// this tool - every field here is genuinely unknown to it. Stated plainly,
-// per "if information cannot be verified, omit it or clearly mark it as
-// unavailable" - never guessed or left implicit.
-function pageEvidenceSection(): string {
-  const fields = [
-    "Title",
-    "Meta description",
-    "H1",
-    "Main content",
-    "Price",
-    "CTA/provider",
-    "Structured data",
-    "Internal links",
-    "Images",
+// this tool - every field here is genuinely unknown to it, EXCEPT title and
+// meta description, which the CTR Optimizer (Phase 3) can supply from the
+// last Site Audit crawl's captured data (still not a live fetch this run -
+// the audit could be stale, so it's labelled as such). H1 is never given
+// real text either way - only an H1 *count* is captured anywhere in this
+// app, never the actual wording. Stated plainly, per "if information cannot
+// be verified, omit it or clearly mark it as unavailable" - never guessed.
+function pageEvidenceSection(ctrOpportunity?: CtrOpportunity): string {
+  const evidence =
+    ctrOpportunity?.pageEvidence.source === "site-audit"
+      ? ctrOpportunity.pageEvidence
+      : null;
+  const lines = [
+    evidence
+      ? `- Title: "${evidence.title ?? ""}"${evidence.titleLength != null ? ` (${evidence.titleLength} characters, from the last Site Audit crawl - re-verify it's still current)` : ""}`
+      : "- Title: Not inspected / unavailable",
+    evidence
+      ? evidence.metaDescription
+        ? `- Meta description: "${evidence.metaDescription}"${evidence.metaDescriptionLength != null ? ` (${evidence.metaDescriptionLength} characters, from the last Site Audit crawl)` : ""}`
+        : "- Meta description: Not captured by the last Site Audit crawl (Google is likely auto-generating it)"
+      : "- Meta description: Not inspected / unavailable",
+    evidence
+      ? `- H1: Not captured as text anywhere in this app (only a count is tracked: ${evidence.h1Count ?? "unknown"}) - inspect the real page for the actual wording.`
+      : "- H1: Not inspected / unavailable",
+    "- Main content: Not inspected / unavailable",
+    "- Price: Not inspected / unavailable",
+    "- CTA/provider: Not inspected / unavailable",
+    "- Structured data: Not inspected / unavailable",
+    "- Internal links: Not inspected / unavailable",
+    "- Images: Not inspected / unavailable",
   ];
   return [
     "This tool does not fetch live page content - inspect the real page before changing anything. Every field below is unconfirmed until you do:",
-    ...fields.map((f) => `- ${f}: Not inspected / unavailable`),
+    ...lines,
+  ].join("\n");
+}
+
+// Phase 3, CTR Optimizer - only rendered when the caller has identified this
+// row as a CTR opportunity (position ~1-10, meaningful impressions, CTR
+// materially below the position benchmark). The benchmark itself, the gap,
+// and the missed-click estimate are always labelled with their real source
+// (this site's own observed data, or the documented heuristic curve) - see
+// ctr-benchmark.ts. Diagnosis flags never assume a rewrite is needed; only
+// evidence-based flags are confirmed issues.
+function ctrDiagnosisSection(o: CtrOpportunity): string {
+  const sourceNote =
+    o.expectedCtrSource === "observed"
+      ? `this site's own observed CTR at this position (${formatNumber(o.expectedCtrSampleImpressions ?? 0)} impressions across ${o.expectedCtrSampleQueries ?? 0} queries in the current window)`
+      : "a documented generic industry-pattern heuristic curve - not a NinjaTickets-specific figure (not enough first-party data yet at this position to compute an observed rate)";
+  return [
+    `- Actual CTR: ${formatCtr(o.actualCtr)}`,
+    `- Expected CTR: ${formatCtr(o.expectedCtr)} - from ${sourceNote}`,
+    `- CTR gap: ${formatCtr(o.ctrGapAbsolute)} (${o.ctrGapRelativePct.toFixed(0)}% below expected)`,
+    `- Estimated missed clicks: ~${formatNumber(o.estimatedMissedClicks)} (impressions x CTR gap - an estimate assuming this page could reach the benchmark, not a guarantee)`,
+    "",
+    "Weakness diagnosis - do not automatically assume a title/meta rewrite is required; only [evidence-based] flags below are confirmed issues, [heuristic] flags need manual verification, and [not-assessable] flags genuinely can't be judged from GSC data alone:",
+    ...o.diagnosisFlags.map(
+      (f) => `- ${f.weakness} [${f.confidence}]: ${f.explanation}`,
+    ),
+    "",
+    `Recommended change: ${o.recommendedChange}`,
+  ].join("\n");
+}
+
+function ctrSafetyRulesSection(): string {
+  return [
+    "- Inspect the actual page first - the Title/Meta above are from the last Site Audit crawl, not a live fetch this run.",
+    "- Preserve facts and working content - do not rewrite the whole page for a click-through problem.",
+    "- Improve search-result appeal without clickbait.",
+    "- Never invent prices, dates, availability or offers.",
+    "- Never keyword-stuff.",
+    "- Keep the title within a sensible SERP length (~60 characters).",
+    "- Keep the meta description concise and useful (~50-160 characters).",
+    "- Use the exact query naturally where justified - do not force it in unnaturally.",
+    "- Consider whether on-page summary copy should also change, so Google is more likely to use the intended snippet instead of rewriting it.",
+    "- Do not automatically assume a title/meta/H1 rewrite is required - preserve them if they're already strong.",
   ].join("\n");
 }
 
@@ -278,11 +337,16 @@ function safetyRulesSection(): string {
  * `internalLinkSuggestions` is optional (and computed by the caller, not
  * here) - omit it entirely when no page inventory is loaded yet, or pass an
  * empty array once genuinely analysed and found empty; the two render
- * different, honest messages (see internalLinkOpportunitiesSection). */
+ * different, honest messages (see internalLinkOpportunitiesSection).
+ * `ctrOpportunity` (Phase 3, CTR Optimizer) is also optional and computed by
+ * the caller - when present, real title/meta evidence (if the caller's Site
+ * Audit data has it) replaces the generic "Not inspected" placeholders, and
+ * a dedicated CTR diagnosis section + CTR-specific safety rules are added. */
 export function buildFixPrompt(
   site: FixPromptSite,
   row: KeywordOpportunityRow,
   internalLinkSuggestions?: InternalLinkSuggestion[],
+  ctrOpportunity?: CtrOpportunity,
 ): string {
   const categories = categoriesInOrder(row.categories);
   const categoryLabels = categories.map((c) => CATEGORY_LABEL[c]).join(", ");
@@ -309,11 +373,11 @@ ${scoreExplanationSection(row)}
 ${competingUrlsSection(row)}
 
 ## 2. Existing page evidence
-${pageEvidenceSection()}
+${pageEvidenceSection(ctrOpportunity)}
 
 ## 3. Diagnosis
 ${diagnosisSection(row)}
-
+${ctrOpportunity ? `\n### 3a. CTR opportunity diagnosis (Phase 3)\n${ctrDiagnosisSection(ctrOpportunity)}\n` : ""}
 ## 4. Recommended improvements
 Only evidence-based changes - do not act on anything not actually supported by the data above.
 
@@ -328,5 +392,5 @@ ${internalLinkOpportunitiesSection(internalLinkSuggestions)}
 
 ## 7. Safety rules
 ${safetyRulesSection()}
-`;
+${ctrOpportunity ? `\n## 8. CTR-specific rules\n${ctrSafetyRulesSection()}\n` : ""}`;
 }
