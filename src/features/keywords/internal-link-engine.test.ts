@@ -1,36 +1,31 @@
 import { describe, expect, it } from "vitest";
-import type { CommonCrawlPage } from "@/types/database";
 import {
   findInternalLinkOpportunities,
   naturalAnchorFromSlug,
+  type CandidatePage,
 } from "@/features/keywords/internal-link-engine";
 
-function page(url: string, title: string | null): CommonCrawlPage {
-  return {
-    id: url,
-    domain: "ninjatickets.com",
-    url,
-    first_seen: "2026-01-01",
-    last_seen: "2026-01-01",
-    cdx_status_code: 200,
-    last_status_code: 200,
-    mime_type: "text/html",
-    title,
-    is_active: true,
-    last_checked_at: "2026-01-01T00:00:00Z",
-  } as CommonCrawlPage;
+function page(
+  url: string,
+  title: string | null,
+  extraText: string | null = null,
+  source: CandidatePage["source"] = "search-index",
+): CandidatePage {
+  return { url, title, extraText, source };
 }
 
 describe("findInternalLinkOpportunities", () => {
-  it("suggests genuinely relevant existing pages for the Llandudno example from the brief", () => {
-    const candidates = [
+  it("suggests genuinely relevant existing pages for the Llandudno example from the brief, using only primaryPages", () => {
+    const primaryPages = [
       page(
         "https://ninjatickets.com/things-to-do-in-llandudno/",
-        "Things to Do in Llandudno | North Wales Guide",
+        "Things to Do in Llandudno",
+        "North Wales Guide",
       ),
       page(
         "https://ninjatickets.com/north-wales-family-attractions/",
-        "North Wales Family Attractions: Llandudno, Conwy & Anglesey",
+        "North Wales Family Attractions",
+        "Llandudno, Conwy & Anglesey",
       ),
       page(
         "https://ninjatickets.com/event/comedy-night-brighton/",
@@ -42,7 +37,7 @@ describe("findInternalLinkOpportunities", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
       targetQuery: "llandudno chocolate experience tickets",
-      candidatePages: candidates,
+      primaryPages,
       pagesWithSearchVisibility: new Set(),
     });
 
@@ -63,14 +58,29 @@ describe("findInternalLinkOpportunities", () => {
       s.sourceUrl.includes("things-to-do-in-llandudno"),
     )!;
     expect(llandudnoPage.matchedTerms).toContain("llandudno");
-    expect(llandudnoPage.existingLinkStatus).toBe("not-inspected");
     expect(llandudnoPage.suggestedAnchor).toBe(
       "Llandudno Chocolate Experience",
     );
   });
 
+  it("works with zero Common Crawl / supplemental data - primaryPages alone is enough", () => {
+    const suggestions = findInternalLinkOpportunities({
+      targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
+      targetQuery: "llandudno chocolate experience",
+      primaryPages: [
+        page(
+          "https://ninjatickets.com/things-to-do-in-llandudno/",
+          "Things to Do in Llandudno",
+        ),
+      ],
+      // supplementalPages omitted entirely.
+      pagesWithSearchVisibility: new Set(),
+    });
+    expect(suggestions).toHaveLength(1);
+  });
+
   it("never suggests the target page as a link source for itself", () => {
-    const candidates = [
+    const primaryPages = [
       page(
         "https://ninjatickets.com/event/llandudno-chocolate-experience-llandudno/",
         "Llandudno Chocolate Experience Tickets",
@@ -84,7 +94,7 @@ describe("findInternalLinkOpportunities", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
       targetQuery: "llandudno chocolate experience tickets",
-      candidatePages: candidates,
+      primaryPages,
       pagesWithSearchVisibility: new Set(),
     });
 
@@ -96,7 +106,7 @@ describe("findInternalLinkOpportunities", () => {
   });
 
   it("prefers pages with existing search visibility when scoring", () => {
-    const candidates = [
+    const primaryPages = [
       page(
         "https://ninjatickets.com/things-to-do-in-llandudno/",
         "Things to Do in Llandudno",
@@ -110,18 +120,14 @@ describe("findInternalLinkOpportunities", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
       targetQuery: "llandudno chocolate experience",
-      candidatePages: candidates,
-      pagesWithSearchVisibility: new Set([
-        "/north-wales-llandudno-guide/",
-      ]),
+      primaryPages,
+      pagesWithSearchVisibility: new Set(["/north-wales-llandudno-guide/"]),
     });
 
     const visible = suggestions.find((s) =>
       s.sourceUrl.includes("north-wales-llandudno-guide"),
     )!;
     expect(visible.hasSearchVisibility).toBe(true);
-    // The visible page should rank at or above an equally-matched page with
-    // no known visibility, since visibility only ever adds to the score.
     const other = suggestions.find((s) =>
       s.sourceUrl.includes("things-to-do-in-llandudno"),
     )!;
@@ -131,7 +137,7 @@ describe("findInternalLinkOpportunities", () => {
   });
 
   it("caps suggestions at maxSuggestions to avoid excessive sitewide linking", () => {
-    const candidates = Array.from({ length: 20 }, (_, i) =>
+    const primaryPages = Array.from({ length: 20 }, (_, i) =>
       page(
         `https://ninjatickets.com/llandudno-guide-${i}/`,
         `Llandudno Guide ${i}`,
@@ -141,7 +147,7 @@ describe("findInternalLinkOpportunities", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
       targetQuery: "llandudno chocolate experience",
-      candidatePages: candidates,
+      primaryPages,
       pagesWithSearchVisibility: new Set(),
       maxSuggestions: 3,
     });
@@ -153,7 +159,7 @@ describe("findInternalLinkOpportunities", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/tickets/",
       targetQuery: "tickets",
-      candidatePages: [page("https://ninjatickets.com/about/", "About")],
+      primaryPages: [page("https://ninjatickets.com/about/", "About")],
       pagesWithSearchVisibility: new Set(),
     });
     expect(suggestions).toEqual([]);
@@ -163,12 +169,103 @@ describe("findInternalLinkOpportunities", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
       targetQuery: "llandudno chocolate",
-      candidatePages: [
+      primaryPages: [
         page("/things-to-do-in-llandudno/", "Things to Do in Llandudno"),
       ],
       pagesWithSearchVisibility: new Set(),
     });
     expect(suggestions).toHaveLength(1);
+  });
+
+  it("merges supplementalPages (Common Crawl) but only to fill in URLs primaryPages doesn't already have", () => {
+    const suggestions = findInternalLinkOpportunities({
+      targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
+      targetQuery: "llandudno chocolate experience",
+      primaryPages: [
+        page(
+          "https://ninjatickets.com/things-to-do-in-llandudno/",
+          "Things to Do in Llandudno (current)",
+        ),
+      ],
+      supplementalPages: [
+        // Same URL as a primary page - primary's title should win, not be
+        // duplicated as a second suggestion ("avoid duplicate target
+        // suggestions").
+        page(
+          "https://ninjatickets.com/things-to-do-in-llandudno/",
+          "Things to Do in Llandudno (stale Common Crawl copy)",
+          null,
+          "common-crawl",
+        ),
+        // A URL only Common Crawl knows about - historical enrichment.
+        page(
+          "https://ninjatickets.com/llandudno-old-guide/",
+          "Llandudno Old Guide",
+          null,
+          "common-crawl",
+        ),
+      ],
+      pagesWithSearchVisibility: new Set(),
+    });
+
+    const bySource = new Map(suggestions.map((s) => [s.sourceUrl, s]));
+    expect(suggestions).toHaveLength(2);
+    expect(
+      bySource.get("https://ninjatickets.com/things-to-do-in-llandudno/")
+        ?.sourceTitle,
+    ).toBe("Things to Do in Llandudno (current)");
+    expect(
+      bySource.has("https://ninjatickets.com/llandudno-old-guide/"),
+    ).toBe(true);
+  });
+
+  it("reports targetLinkStatus honestly from the internal-link audit data, or not-verified when unavailable", () => {
+    const primaryPages = [
+      page(
+        "https://ninjatickets.com/things-to-do-in-llandudno/",
+        "Things to Do in Llandudno",
+      ),
+    ];
+    const base = {
+      targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
+      targetQuery: "llandudno chocolate experience",
+      primaryPages,
+      pagesWithSearchVisibility: new Set<string>(),
+    };
+
+    const notVerified = findInternalLinkOpportunities(base);
+    expect(notVerified[0].targetLinkStatus).toBe("not-verified");
+
+    const weak = findInternalLinkOpportunities({
+      ...base,
+      weaklyLinkedTargetUrls: new Set([
+        "/event/llandudno-chocolate-experience-llandudno/",
+      ]),
+    });
+    expect(weak[0].targetLinkStatus).toBe("target-weakly-linked");
+
+    const wellLinked = findInternalLinkOpportunities({
+      ...base,
+      weaklyLinkedTargetUrls: new Set(["/some-other-page/"]),
+    });
+    expect(wellLinked[0].targetLinkStatus).toBe("target-well-linked");
+  });
+
+  it("uses extraText (blurb/category/city from search-index.json) for relevance, not just title/URL", () => {
+    const suggestions = findInternalLinkOpportunities({
+      targetUrl: "/event/llandudno-chocolate-experience-llandudno/",
+      targetQuery: "llandudno chocolate experience",
+      primaryPages: [
+        page(
+          "https://ninjatickets.com/wales-guide/",
+          "Wales Guide",
+          "Covers Llandudno, Conwy and Bangor",
+        ),
+      ],
+      pagesWithSearchVisibility: new Set(),
+    });
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].matchedTerms).toContain("llandudno");
   });
 });
 

@@ -58,6 +58,7 @@ import {
   type SyncRunFilters,
   type TrackedRankKeywordFormValues,
 } from "@/lib/api";
+import { fetchSitePagesInventory } from "@/features/keywords/site-pages-source";
 
 // Stable query keys (brief §21) so manual sync (Phase 5) can invalidate
 // precisely.
@@ -90,6 +91,8 @@ export const queryKeys = {
     ["observed-serp-results", siteId] as const,
   commonCrawlPages: (domain: string) => ["common-crawl-pages", domain] as const,
   commonCrawlRuns: (domain: string) => ["common-crawl-runs", domain] as const,
+  sitePagesInventory: (domain: string) =>
+    ["site-pages-inventory", domain] as const,
   engineQueryPositions: (siteId: string, days: number) =>
     ["engine-query-positions", siteId, days] as const,
   siteAuditRuns: (siteId: string) => ["site-audit-runs", siteId] as const,
@@ -392,6 +395,23 @@ export function useCommonCrawlPages(domain: string) {
     queryKey: queryKeys.commonCrawlPages(domain),
     queryFn: () => getCommonCrawlPages(domain),
     enabled: !!domain,
+  });
+}
+
+// Internal Link Engine's primary inventory (sitemap.xml + search-index.json,
+// fetched directly from the browser - see site-pages-source.ts). Auto-fires
+// like any other query, unlike the Common Crawl sync above which is a
+// manual one-click mutation - this needs no admin action and no Supabase
+// round trip, so it "just works" the moment the Opportunities page loads.
+// 5-minute staleTime matches the site's own Cache-Control on
+// /assets/data/* (max-age=300), so this never polls more often than the
+// data itself actually changes.
+export function useSitePagesInventory(domain: string) {
+  return useQuery({
+    queryKey: queryKeys.sitePagesInventory(domain),
+    queryFn: () => fetchSitePagesInventory(domain),
+    enabled: !!domain,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

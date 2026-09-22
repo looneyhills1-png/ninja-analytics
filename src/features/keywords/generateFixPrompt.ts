@@ -194,13 +194,19 @@ function internalLinkOpportunitiesSection(
       const visibility = s.hasSearchVisibility
         ? "yes - this source page already has its own Search Console visibility"
         : "not known to rank for any tracked query";
+      const linkStatus =
+        s.targetLinkStatus === "target-weakly-linked"
+          ? "the current internal-link audit flags this target as weakly linked overall - a new link here is genuinely valuable"
+          : s.targetLinkStatus === "target-well-linked"
+            ? "the current internal-link audit shows this target is already adequately linked overall - a new link is lower priority, and check this specific source doesn't already link to it before adding one"
+            : "existing link not verified - the internal-link audit wasn't reachable this run; confirm by hand whether this source already links to the target";
       return [
         `${i + 1}. Source page: ${s.sourceUrl}${s.sourceTitle ? ` (${s.sourceTitle})` : ""}`,
         `   Target page: ${s.targetUrl}`,
         `   Suggested anchor: "${s.suggestedAnchor}" (derived from the URL - verify against the real page title before use)`,
         `   Reason/relevance: shares real terms with this query/URL - ${s.matchedTerms.join(", ")}`,
         `   Source page authority/visibility: ${visibility}`,
-        "   Existing link status: Not inspected / unavailable - live page content wasn't fetched this run; confirm no suitable link already exists before adding one.",
+        `   Existing link status: ${linkStatus}`,
       ].join("\n");
     })
     .join("\n\n");

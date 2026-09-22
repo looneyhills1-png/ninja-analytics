@@ -1,7 +1,12 @@
 import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { Wand2 } from "lucide-react";
-import { useCommonCrawlPages, useKeywordOpportunities, useSites } from "@/lib/hooks";
+import {
+  useCommonCrawlPages,
+  useKeywordOpportunities,
+  useSitePagesInventory,
+  useSites,
+} from "@/lib/hooks";
 import { usePrivacyMode } from "@/lib/privacy";
 import type { KeywordsOutletContext } from "@/features/keywords/KeywordsLayout";
 import { Card } from "@/components/ui/card";
@@ -15,6 +20,7 @@ import { buildFixPrompt } from "@/features/keywords/generateFixPrompt";
 import { diagnoseOpportunity } from "@/features/keywords/opportunity-diagnosis";
 import {
   findInternalLinkOpportunities,
+  type CandidatePage,
   type InternalLinkSuggestion,
 } from "@/features/keywords/internal-link-engine";
 import {
@@ -64,10 +70,12 @@ export function KeywordsOpportunitiesPage() {
   // domain/name for the generated prompt, not a second network request.
   const sitesQuery = useSites();
   const site = sitesQuery.data?.find((s) => s.id === siteId);
-  // Internal Link Engine (Phase 2) - existing page inventory for this
-  // domain, already synced by the (separate, on-demand) Common Crawl sync.
-  // No new fetch here; if it hasn't been synced yet, suggestions are
-  // honestly reported as "not analysed" rather than guessed.
+  // Internal Link Engine (Phase 2) - primary inventory is this site's own
+  // current sitemap.xml + search-index.json, fetched directly from the
+  // browser (see site-pages-source.ts) and auto-loaded, no admin action
+  // needed. Common Crawl is optional supplemental/history data only - the
+  // engine works fully without it.
+  const sitePagesQuery = useSitePagesInventory(site?.domain ?? "");
   const commonCrawlQuery = useCommonCrawlPages(site?.domain ?? "");
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState("");
@@ -110,20 +118,32 @@ export function KeywordsOpportunitiesPage() {
     [rows],
   );
 
-  // undefined = not analysed (no target URL, or the page inventory hasn't
-  // loaded/synced yet) - rendered as an honest "not analysed" message, never
-  // as zero relevant pages.
+  // undefined = not analysed (no target URL, or the site's own page
+  // inventory hasn't loaded yet this run) - rendered as an honest "not
+  // analysed" message, never as zero relevant pages. Common Crawl data is
+  // merged in only when it happens to already be loaded - it's never
+  // required and this never waits on it.
   function suggestionsFor(
     row: KeywordOpportunityRow,
   ): InternalLinkSuggestion[] | undefined {
     if (!row.rankingUrl) return undefined;
-    const pages = commonCrawlQuery.data;
-    if (!pages) return undefined;
+    const primaryPages = sitePagesQuery.data?.pages;
+    if (!primaryPages) return undefined;
+    const supplementalPages: CandidatePage[] = (commonCrawlQuery.data ?? [])
+      .filter((p) => p.is_active)
+      .map((p) => ({
+        url: p.url,
+        title: p.title,
+        extraText: null,
+        source: "common-crawl" as const,
+      }));
     return findInternalLinkOpportunities({
       targetUrl: row.rankingUrl,
       targetQuery: row.query,
-      candidatePages: pages.filter((p) => p.is_active),
+      primaryPages,
+      supplementalPages,
       pagesWithSearchVisibility: searchVisibleUrls,
+      weaklyLinkedTargetUrls: sitePagesQuery.data?.weaklyLinkedUrls,
     });
   }
 
@@ -405,9 +425,9 @@ function InternalLinkOpportunitiesPanel({
       </p>
       {suggestions === undefined ? (
         <p className="text-xs text-muted-foreground">
-          Not analysed - sync this site&apos;s page inventory (Competitors
-          &rarr; Historical Pages) to enable suggestions, or this query has
-          no ranking URL to link to.
+          Not analysed - this site&apos;s current sitemap/search index
+          hasn&apos;t loaded yet, or this query has no ranking URL to link
+          to.
         </p>
       ) : suggestions.length === 0 ? (
         <p className="text-xs text-muted-foreground">
@@ -441,8 +461,12 @@ function InternalLinkOpportunitiesPanel({
                   <td className="py-1 pr-2 text-muted-foreground">
                     {s.hasSearchVisibility ? "Ranks already" : "Unknown"}
                   </td>
-                  <td className="py-1 pr-2 text-muted-foreground">
-                    Not inspected
+                  <td className="max-w-[10rem] truncate py-1 pr-2 text-muted-foreground">
+                    {s.targetLinkStatus === "target-weakly-linked"
+                      ? "Target weakly linked"
+                      : s.targetLinkStatus === "target-well-linked"
+                        ? "Target already well linked"
+                        : "Existing link not verified"}
                   </td>
                 </tr>
               ))}
