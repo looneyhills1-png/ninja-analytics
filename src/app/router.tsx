@@ -11,7 +11,6 @@ import { ResetPasswordPage } from "@/auth/ResetPasswordPage";
 import { MfaSetupPage } from "@/auth/MfaSetupPage";
 import { MfaChallengePage } from "@/auth/MfaChallengePage";
 import { NotAuthorizedPage } from "@/auth/NotAuthorizedPage";
-import { Spinner } from "@/components/ui/spinner";
 
 // Keep route pages in the main application bundle. The dashboard is an
 // authenticated admin tool, and avoiding per-route chunk files prevents stale
