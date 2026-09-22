@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
@@ -13,150 +13,42 @@ import { MfaChallengePage } from "@/auth/MfaChallengePage";
 import { NotAuthorizedPage } from "@/auth/NotAuthorizedPage";
 import { Spinner } from "@/components/ui/spinner";
 
-// Code-split the authenticated dashboard pages so the heavy charting library
-// (Recharts) is only fetched after login, not on the login screen.
-const OverviewPage = lazy(() =>
-  import("@/features/dashboard/OverviewPage").then((m) => ({
-    default: m.OverviewPage,
-  })),
-);
-const SitesPage = lazy(() =>
-  import("@/features/sites/SitesPage").then((m) => ({ default: m.SitesPage })),
-);
-const SiteDetailPage = lazy(() =>
-  import("@/features/sites/SiteDetailPage").then((m) => ({
-    default: m.SiteDetailPage,
-  })),
-);
-const SyncRunsPage = lazy(() =>
-  import("@/features/sync-runs/SyncRunsPage").then((m) => ({
-    default: m.SyncRunsPage,
-  })),
-);
-const SecuritySettingsPage = lazy(() =>
-  import("@/auth/SecuritySettingsPage").then((m) => ({
-    default: m.SecuritySettingsPage,
-  })),
-);
-const SystemPage = lazy(() =>
-  import("@/features/system/SystemPage").then((m) => ({
-    default: m.SystemPage,
-  })),
-);
-const KeywordsLayout = lazy(() =>
-  import("@/features/keywords/KeywordsLayout").then((m) => ({
-    default: m.KeywordsLayout,
-  })),
-);
-const KeywordsOverviewPage = lazy(() =>
-  import("@/features/keywords/KeywordsOverviewPage").then((m) => ({
-    default: m.KeywordsOverviewPage,
-  })),
-);
-const KeywordsOpportunitiesPage = lazy(() =>
-  import("@/features/keywords/KeywordsOpportunitiesPage").then((m) => ({
-    default: m.KeywordsOpportunitiesPage,
-  })),
-);
-const CtrOptimizerPage = lazy(() =>
-  import("@/features/keywords/CtrOptimizerPage").then((m) => ({
-    default: m.CtrOptimizerPage,
-  })),
-);
-const KeywordsRankingsPage = lazy(() =>
-  import("@/features/keywords/KeywordsRankingsPage").then((m) => ({
-    default: m.KeywordsRankingsPage,
-  })),
-);
-const KeywordsQueriesPage = lazy(() =>
-  import("@/features/keywords/KeywordsQueriesPage").then((m) => ({
-    default: m.KeywordsQueriesPage,
-  })),
-);
-const KeywordsPagesPage = lazy(() =>
-  import("@/features/keywords/KeywordsPagesPage").then((m) => ({
-    default: m.KeywordsPagesPage,
-  })),
-);
-const KeywordsClustersPage = lazy(() =>
-  import("@/features/keywords/KeywordsClustersPage").then((m) => ({
-    default: m.KeywordsClustersPage,
-  })),
-);
-const CompetitorsLayout = lazy(() =>
-  import("@/features/competitors/CompetitorsLayout").then((m) => ({
-    default: m.CompetitorsLayout,
-  })),
-);
-const CompetitorsOverviewPage = lazy(() =>
-  import("@/features/competitors/CompetitorsOverviewPage").then((m) => ({
-    default: m.CompetitorsOverviewPage,
-  })),
-);
-const CompetitorsHistoricalPagesPage = lazy(() =>
-  import("@/features/competitors/CompetitorsHistoricalPagesPage").then((m) => ({
-    default: m.CompetitorsHistoricalPagesPage,
-  })),
-);
-const CompetitorsNewLostPagesPage = lazy(() =>
-  import("@/features/competitors/CompetitorsNewLostPagesPage").then((m) => ({
-    default: m.CompetitorsNewLostPagesPage,
-  })),
-);
-const CompetitorsLinksPage = lazy(() =>
-  import("@/features/competitors/CompetitorsLinksPage").then((m) => ({
-    default: m.CompetitorsLinksPage,
-  })),
-);
-const SiteAuditPage = lazy(() =>
-  import("@/features/site-audit/SiteAuditPage").then((m) => ({
-    default: m.SiteAuditPage,
-  })),
-);
-const AiVisibilityPage = lazy(() =>
-  import("@/features/ai-visibility/AiVisibilityPage").then((m) => ({
-    default: m.AiVisibilityPage,
-  })),
-);
-const DemoLayout = lazy(() =>
-  import("@/features/demo/DemoPages").then((m) => ({
-    default: m.DemoLayout,
-  })),
-);
-const DemoOverviewPage = lazy(() =>
-  import("@/features/demo/DemoPages").then((m) => ({
-    default: m.DemoOverviewPage,
-  })),
-);
-const DemoSitesPage = lazy(() =>
-  import("@/features/demo/DemoPages").then((m) => ({
-    default: m.DemoSitesPage,
-  })),
-);
-const DemoSiteDetailPage = lazy(() =>
-  import("@/features/demo/DemoPages").then((m) => ({
-    default: m.DemoSiteDetailPage,
-  })),
-);
-const DemoSyncHistoryPage = lazy(() =>
-  import("@/features/demo/DemoPages").then((m) => ({
-    default: m.DemoSyncHistoryPage,
-  })),
-);
-const DemoSystemPage = lazy(() =>
-  import("@/features/demo/DemoPages").then((m) => ({
-    default: m.DemoSystemPage,
-  })),
-);
-
-const demoFallback = (
-  <div className="flex min-h-screen items-center justify-center">
-    <Spinner className="h-6 w-6 text-muted-foreground" />
-  </div>
-);
+// Keep route pages in the main application bundle. The dashboard is an
+// authenticated admin tool, and avoiding per-route chunk files prevents stale
+// browser/app-shell deployments from requesting chunk filenames that no longer
+// exist after a Cloudflare Pages deployment.
+import { OverviewPage } from "@/features/dashboard/OverviewPage";
+import { SitesPage } from "@/features/sites/SitesPage";
+import { SiteDetailPage } from "@/features/sites/SiteDetailPage";
+import { SyncRunsPage } from "@/features/sync-runs/SyncRunsPage";
+import { SecuritySettingsPage } from "@/auth/SecuritySettingsPage";
+import { SystemPage } from "@/features/system/SystemPage";
+import { KeywordsLayout } from "@/features/keywords/KeywordsLayout";
+import { KeywordsOverviewPage } from "@/features/keywords/KeywordsOverviewPage";
+import { KeywordsOpportunitiesPage } from "@/features/keywords/KeywordsOpportunitiesPage";
+import { CtrOptimizerPage } from "@/features/keywords/CtrOptimizerPage";
+import { KeywordsRankingsPage } from "@/features/keywords/KeywordsRankingsPage";
+import { KeywordsQueriesPage } from "@/features/keywords/KeywordsQueriesPage";
+import { KeywordsPagesPage } from "@/features/keywords/KeywordsPagesPage";
+import { KeywordsClustersPage } from "@/features/keywords/KeywordsClustersPage";
+import { CompetitorsLayout } from "@/features/competitors/CompetitorsLayout";
+import { CompetitorsOverviewPage } from "@/features/competitors/CompetitorsOverviewPage";
+import { CompetitorsHistoricalPagesPage } from "@/features/competitors/CompetitorsHistoricalPagesPage";
+import { CompetitorsNewLostPagesPage } from "@/features/competitors/CompetitorsNewLostPagesPage";
+import { CompetitorsLinksPage } from "@/features/competitors/CompetitorsLinksPage";
+import { SiteAuditPage } from "@/features/site-audit/SiteAuditPage";
+import { AiVisibilityPage } from "@/features/ai-visibility/AiVisibilityPage";
+import {
+  DemoLayout,
+  DemoOverviewPage,
+  DemoSitesPage,
+  DemoSiteDetailPage,
+  DemoSyncHistoryPage,
+  DemoSystemPage,
+} from "@/features/demo/DemoPages";
 
 function demoElement(element: ReactNode) {
-  return <Suspense fallback={demoFallback}>{element}</Suspense>;
+  return element;
 }
 
 /**
