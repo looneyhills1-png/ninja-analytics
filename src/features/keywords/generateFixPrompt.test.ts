@@ -160,5 +160,157 @@ describe("buildFixPrompt", () => {
     expect(prompt).toContain(
       "No category-specific checklist applies here beyond the recommended action above",
     );
+    // No title/H1 rewrite instruction is injected for a row with no
+    // relevant category - it's never an automatic, unconditional command.
+    expect(prompt).not.toContain("Improve title/H1/meta");
+    expect(prompt).not.toMatch(/Rewrite the (title|H1)\b/i);
+  });
+
+  it("gives CTR-first advice for a high-ranking, zero-click page", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("west end tickets", "2026-01-10", 0, 30, 5)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("west end tickets", "/event/example-2/", "2026-01-10", 0, 30),
+      ],
+      days: 7,
+    });
+    expect(row.currentPosition).toBeCloseTo(5, 1);
+    expect(row.clicks).toBe(0);
+    expect(row.impressions).toBe(30);
+
+    const prompt = buildFixPrompt(SITE, row);
+
+    expect(prompt).toContain("CTR-first");
+    expect(prompt).toContain(
+      "the ranking itself is already strong enough that CTR is the primary measurable weakness",
+    );
+    expect(prompt).toContain(
+      "Focus first on title tag, meta description, and on-page summary/snippet clarity",
+    );
+    expect(prompt).toContain(
+      "Avoid a large content rewrite unless it's independently justified below.",
+    );
+    // The diagnosis section names the same CTR weakness explicitly.
+    expect(prompt).toContain(
+      "CTR is effectively zero on 30 impressions - this is the primary measurable weakness right now.",
+    );
+  });
+
+  it("keeps the title/H1 rewrite instruction conditional, not automatic", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+    const prompt = buildFixPrompt(SITE, row);
+
+    expect(prompt).toContain(
+      "Improve title/H1/meta only if genuinely justified by the above.",
+    );
+    expect(prompt).not.toMatch(/Rewrite the (title|H1)\b/i);
+  });
+
+  it("includes the user-value improvement rules and event-page checklist for every row", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+    const prompt = buildFixPrompt(SITE, row);
+
+    // The three-goal general checklist.
+    expect(prompt).toContain("search intent match");
+    expect(prompt).toContain("CTR/snippet appeal");
+    expect(prompt).toContain("originality and usefulness");
+    expect(prompt).toContain("affiliate-page value beyond just outbound links");
+    expect(prompt).toContain("structured data");
+    expect(prompt).toContain("trust/accuracy");
+    // The event/ticket-page-specific checklist.
+    expect(prompt).toContain("what the ticket includes");
+    expect(prompt).toContain("verified price or from-price");
+    expect(prompt).toContain("expected visit duration");
+    expect(prompt).toContain("accessibility");
+    expect(prompt).toContain("parking/public transport");
+    expect(prompt).toContain('practical "before you go" advice');
+    expect(prompt).toContain("FAQs based on real search intent");
+    // The stand-alone "useful without a click" rule.
+    expect(prompt).toContain(
+      "the page should provide enough useful information that a visitor benefits even if they never click an affiliate link",
+    );
+  });
+
+  it("uses non-promissory AdSense-readiness wording", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+    const prompt = buildFixPrompt(SITE, row);
+
+    expect(prompt).toContain(
+      "Improve this page's overall content quality and usefulness so it is stronger for users and better aligned with monetisation-quality expectations.",
+    );
+    expect(prompt).toContain(
+      "Do not claim the page qualifies for AdSense or guarantee approval.",
+    );
+    // Never an affirmative/promissory claim of approval.
+    expect(prompt).not.toContain("This page qualifies for AdSense");
+    expect(prompt).not.toContain("is guaranteed");
+    expect(prompt).not.toContain("will be approved");
+  });
+
+  it("never invents page-content or diagnosis details it cannot verify", () => {
+    const [row] = computeKeywordOpportunities({
+      site: SITE,
+      queryRows: [q("event tickets", "2026-01-10", 5, 50, 7)],
+      bingQueryRows: [],
+      queryPageRows: [
+        qp("event tickets", "/event/example/", "2026-01-10", 5, 50),
+      ],
+      days: 7,
+    });
+    const prompt = buildFixPrompt(SITE, row);
+
+    // Every page-evidence field is explicitly marked unavailable, never
+    // guessed at.
+    for (const field of [
+      "Title",
+      "Meta description",
+      "H1",
+      "Main content",
+      "Price",
+      "CTA/provider",
+      "Structured data",
+      "Internal links",
+      "Images",
+    ]) {
+      expect(prompt).toContain(`- ${field}: Not inspected / unavailable`);
+    }
+    expect(prompt).toContain(
+      "User-value/content weakness: Not inspected / unavailable",
+    );
+    expect(prompt).toContain(
+      "Monetisation-quality weakness: Not inspected / unavailable",
+    );
+    expect(prompt).toContain(
+      "Do not invent facts, prices, dates, accessibility details, opening hours or facilities.",
+    );
+    expect(prompt).toContain(
+      "If information cannot be verified, omit it or clearly mark it as unavailable.",
+    );
   });
 });
