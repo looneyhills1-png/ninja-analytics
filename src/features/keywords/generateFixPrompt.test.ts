@@ -391,6 +391,8 @@ describe("buildFixPrompt", () => {
 
     const prompt = buildFixPrompt(SITE, row);
 
-    expect(prompt).toContain("Not analysed this run - no page inventory was available.");
+    expect(prompt).toContain(
+      "Not analysed this run - no page inventory was available.",
+    );
   });
 });

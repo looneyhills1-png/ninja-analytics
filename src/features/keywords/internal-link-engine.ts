@@ -145,9 +145,7 @@ export function naturalAnchorFromSlug(urlOrPath: string): string {
     seen.add(key);
     deduped.push(w);
   }
-  return deduped
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return deduped.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 /**
@@ -191,9 +189,7 @@ export function findInternalLinkOpportunities(
     // A shared term appearing in the URL path (not just the title) is a
     // stronger structural relevance signal for this site.
     const urlMatchBonus = matched.filter((t) => urlTokenSet.has(t)).length;
-    const hasSearchVisibility = pagesWithSearchVisibility.has(
-      pathOf(page.url),
-    );
+    const hasSearchVisibility = pagesWithSearchVisibility.has(pathOf(page.url));
     const relevanceScore =
       matched.length + urlMatchBonus + (hasSearchVisibility ? 1 : 0);
 

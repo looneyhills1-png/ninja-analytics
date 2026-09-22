@@ -146,9 +146,7 @@ function pageEvidenceSection(): string {
   ].join("\n");
 }
 
-function diagnosisSection(
-  row: KeywordOpportunityRow,
-): string {
+function diagnosisSection(row: KeywordOpportunityRow): string {
   const diagnosis = diagnoseOpportunity(row);
   return [
     `- SEO weakness: ${diagnosis.seoWeakness}`,
@@ -231,7 +229,7 @@ const EVENT_PAGE_CONSIDERATIONS = [
   "parking/public transport",
   "venue information",
   "what makes the experience distinctive",
-  "practical \"before you go\" advice",
+  'practical "before you go" advice',
   "FAQs based on real search intent",
   "nearby/relevant internal links",
   "useful images where legally available",

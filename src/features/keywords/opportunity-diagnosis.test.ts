@@ -136,9 +136,7 @@ describe("diagnoseOpportunity", () => {
 
     const diagnosis = diagnoseOpportunity(row);
 
-    expect(diagnosis.priorityAction).toContain(
-      "Identify what changed",
-    );
+    expect(diagnosis.priorityAction).toContain("Identify what changed");
     expect(diagnosis.priorityAction).toContain(
       "don't assume the content is simply stale",
     );
