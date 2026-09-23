@@ -36,6 +36,7 @@ import { CompetitorsHistoricalPagesPage } from "@/features/competitors/Competito
 import { CompetitorsNewLostPagesPage } from "@/features/competitors/CompetitorsNewLostPagesPage";
 import { CompetitorsLinksPage } from "@/features/competitors/CompetitorsLinksPage";
 import { SiteAuditPage } from "@/features/site-audit/SiteAuditPage";
+import { IndexingPage } from "@/features/indexing/IndexingPage";
 import { AiVisibilityPage } from "@/features/ai-visibility/AiVisibilityPage";
 import {
   DemoLayout,
@@ -136,6 +137,7 @@ export const router = createBrowserRouter(
               ],
             },
             { path: "/site-audit", element: <SiteAuditPage /> },
+            { path: "/indexing", element: <IndexingPage /> },
             { path: "/ai-visibility", element: <AiVisibilityPage /> },
             { path: "/sync-runs", element: <SyncRunsPage /> },
             { path: "/system", element: <SystemPage /> },

@@ -181,7 +181,8 @@ jobs:
         run: |
           for fn in manage-sites manage-portfolio manual-sync \
                     scheduled-sync-gsc scheduled-sync-ga4 scheduled-sync-bing \
-                    scheduled-uptime ai-briefing site-audit-crawl common-crawl-sync; do
+                    scheduled-uptime ai-briefing site-audit-crawl common-crawl-sync \
+                    inspect-urls scheduled-inspect-urls; do
             echo "::group::Deploy $fn"
             supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api
             echo "::endgroup::"
@@ -199,7 +200,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           for fn in manage-sites manage-portfolio manual-sync \
                     scheduled-sync-gsc scheduled-sync-ga4 scheduled-sync-bing \
-                    scheduled-uptime ai-briefing site-audit-crawl common-crawl-sync; do
+                    scheduled-uptime ai-briefing site-audit-crawl common-crawl-sync \
+                    inspect-urls scheduled-inspect-urls; do
             # supabase functions list --output-format json has returned both a
             # bare array and {"functions": [...]} across CLI versions - accept
             # either shape rather than assuming the root itself is the array.

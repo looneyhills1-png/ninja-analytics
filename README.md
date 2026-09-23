@@ -214,7 +214,7 @@ ALLOWED_APP_ORIGIN=https://monitor.example.com
 
 ### 5. Deploy the Edge Functions - the one terminal step
 
-This is the **only** part that isn't point-and-click. The eight functions - `manage-sites`, `manage-portfolio`, `manual-sync`, `scheduled-sync-gsc`, `scheduled-sync-ga4`, `scheduled-sync-bing`, `scheduled-uptime`, `ai-briefing` - share helpers in [`supabase/functions/_shared/`](supabase/functions/_shared) (imported as `../_shared/...`), and the dashboard's in-browser editor deploys one function in isolation, so it can't resolve those shared imports. The [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) bundles the shared code automatically, so run this once from a clone of the repo:
+This is the **only** part that isn't point-and-click. The functions - `manage-sites`, `manage-portfolio`, `manual-sync`, `scheduled-sync-gsc`, `scheduled-sync-ga4`, `scheduled-sync-bing`, `scheduled-uptime`, `ai-briefing`, `site-audit-crawl`, `common-crawl-sync`, `inspect-urls`, `scheduled-inspect-urls` - share helpers in [`supabase/functions/_shared/`](supabase/functions/_shared) (imported as `../_shared/...`), and the dashboard's in-browser editor deploys one function in isolation, so it can't resolve those shared imports. The [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) bundles the shared code automatically, so run this once from a clone of the repo:
 
 ```bash
 supabase login
@@ -229,9 +229,11 @@ supabase functions deploy scheduled-uptime
 supabase functions deploy ai-briefing
 supabase functions deploy site-audit-crawl
 supabase functions deploy common-crawl-sync
+supabase functions deploy inspect-urls
+supabase functions deploy scheduled-inspect-urls
 ```
 
-Then confirm all ten appear under **Edge Functions** in the dashboard. After this one step, everything else is back in the browser.
+Then confirm all twelve appear under **Edge Functions** in the dashboard. After this one step, everything else is back in the browser.
 
 ### 6. Lock down Supabase Auth and create your admin
 

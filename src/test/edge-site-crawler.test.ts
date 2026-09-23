@@ -5,6 +5,7 @@ import {
   isDisallowed,
   isLikelySitemapIndex,
   parseRobotsTxt,
+  parseSitemapLastmods,
   parseSitemapLocs,
   resolveLink,
 } from "../../supabase/functions/_shared/site-crawler";
@@ -54,6 +55,26 @@ describe("parseSitemapLocs / isLikelySitemapIndex", () => {
       isLikelySitemapIndex("<sitemapindex><sitemap></sitemap></sitemapindex>"),
     ).toBe(true);
     expect(isLikelySitemapIndex("<urlset></urlset>")).toBe(false);
+  });
+});
+
+describe("parseSitemapLastmods", () => {
+  it("maps loc -> lastmod for entries that have both (Phase 4 indexing tracker's freshness signal)", () => {
+    const xml = `<urlset>
+      <url><loc>https://a.com/1</loc><lastmod>2026-09-20</lastmod></url>
+      <url><loc>https://a.com/2</loc><lastmod>2026-09-01</lastmod></url>
+    </urlset>`;
+    const map = parseSitemapLastmods(xml);
+    expect(map.get("https://a.com/1")).toBe("2026-09-20");
+    expect(map.get("https://a.com/2")).toBe("2026-09-01");
+    expect(map.size).toBe(2);
+  });
+
+  it("never invents a lastmod for a <url> entry that has none", () => {
+    const xml = `<urlset><url><loc>https://a.com/no-lastmod</loc></url></urlset>`;
+    const map = parseSitemapLastmods(xml);
+    expect(map.has("https://a.com/no-lastmod")).toBe(false);
+    expect(map.size).toBe(0);
   });
 });
 

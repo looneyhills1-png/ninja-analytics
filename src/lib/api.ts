@@ -41,6 +41,8 @@ import type {
   TrackedRankKeyword,
   TriggerType,
   UptimeCheck,
+  UrlInspection,
+  UrlInspectionHistory,
 } from "@/types/database";
 
 // Centralized data access. UI components never call supabase directly - they
@@ -1362,5 +1364,81 @@ export async function recordAiVisibilityObservation(
     "manage-portfolio",
     { action: "ai-observation.record", observation: input },
     "Could not record the observation.",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Indexing / URL Inspection (Ranking Growth Roadmap Phase 4)
+// ---------------------------------------------------------------------------
+
+/** The current cached state for every URL this site has ever had inspected -
+ * cheap to read for the Indexing dashboard (see supabase/functions/
+ * inspect-urls and scheduled-inspect-urls for how rows get here). */
+export async function getUrlInspections(
+  siteId: string,
+): Promise<UrlInspection[]> {
+  return fetchAllPages<UrlInspection>(() =>
+    supabase
+      .from("url_inspections")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("last_inspected_at", { ascending: false }),
+  );
+}
+
+/** Snapshot history for one URL, newest first - lets the UI show real
+ * changes over time ("Not indexed -> Indexed" etc.) without ever
+ * overwriting the only previous state. Fetched on demand (row expand), not
+ * for every tracked URL up front. */
+export async function getUrlInspectionHistory(
+  siteId: string,
+  url: string,
+): Promise<UrlInspectionHistory[]> {
+  const { data, error } = await supabase
+    .from("url_inspection_history")
+    .select("*")
+    .eq("site_id", siteId)
+    .eq("url", url)
+    .order("inspected_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface InspectUrlsResult {
+  ok: boolean;
+  results: Array<{
+    url: string;
+    status: "inspected" | "skipped_cached" | "failed";
+    ninjaStatus?: string;
+    errorMessage?: string;
+  }>;
+  inspected: number;
+  skippedCached: number;
+  failed: number;
+}
+
+/** On-demand only. See supabase/functions/inspect-urls - a hard server-side
+ * cap (10/request) enforces the Search Console quota regardless of how many
+ * URLs the caller passes. Already-fresh URLs are skipped (not re-inspected)
+ * unless `force` is set, so re-clicking "Inspect" on an unchanged URL never
+ * spends quota for nothing. */
+export async function triggerUrlInspection(
+  siteId: string,
+  urls: string[],
+  opts: {
+    force?: boolean;
+    siteLastmodByUrl?: Record<string, string | null>;
+  } = {},
+): Promise<InspectUrlsResult> {
+  return invokeFunction<InspectUrlsResult>(
+    "inspect-urls",
+    {
+      siteId,
+      urls,
+      force: opts.force ?? false,
+      siteLastmodByUrl: opts.siteLastmodByUrl,
+    },
+    "Could not inspect these URLs.",
   );
 }

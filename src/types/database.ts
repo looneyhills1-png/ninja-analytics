@@ -33,6 +33,14 @@ export type AiVisibilitySource =
   | "dogpile"
   | "perplexity"
   | "other";
+export type NinjaIndexStatus =
+  | "indexed"
+  | "not_indexed"
+  | "crawled_not_indexed"
+  | "discovered_not_indexed"
+  | "canonical_mismatch"
+  | "blocked"
+  | "unknown";
 
 export interface Database {
   public: {
@@ -852,6 +860,112 @@ export interface Database {
           },
         ];
       };
+      url_inspections: {
+        Row: {
+          site_id: string;
+          url: string;
+          last_inspected_at: string;
+          inspected_by: string | null;
+          verdict: string | null;
+          coverage_state: string | null;
+          robots_txt_state: string | null;
+          indexing_state: string | null;
+          page_fetch_state: string | null;
+          google_canonical: string | null;
+          user_canonical: string | null;
+          last_crawl_time: string | null;
+          crawled_as: string | null;
+          sitemaps: string[];
+          ninja_status: NinjaIndexStatus;
+          site_lastmod: string | null;
+          raw_response: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          site_id: string;
+          url: string;
+          last_inspected_at?: string;
+          inspected_by?: string | null;
+          verdict?: string | null;
+          coverage_state?: string | null;
+          robots_txt_state?: string | null;
+          indexing_state?: string | null;
+          page_fetch_state?: string | null;
+          google_canonical?: string | null;
+          user_canonical?: string | null;
+          last_crawl_time?: string | null;
+          crawled_as?: string | null;
+          sitemaps?: string[];
+          ninja_status: NinjaIndexStatus;
+          site_lastmod?: string | null;
+          raw_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["url_inspections"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "url_inspections_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      url_inspection_history: {
+        Row: {
+          id: string;
+          site_id: string;
+          url: string;
+          inspected_at: string;
+          inspected_by: string | null;
+          verdict: string | null;
+          coverage_state: string | null;
+          robots_txt_state: string | null;
+          indexing_state: string | null;
+          page_fetch_state: string | null;
+          google_canonical: string | null;
+          user_canonical: string | null;
+          last_crawl_time: string | null;
+          crawled_as: string | null;
+          sitemaps: string[];
+          ninja_status: NinjaIndexStatus;
+          site_lastmod: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          url: string;
+          inspected_at?: string;
+          inspected_by?: string | null;
+          verdict?: string | null;
+          coverage_state?: string | null;
+          robots_txt_state?: string | null;
+          indexing_state?: string | null;
+          page_fetch_state?: string | null;
+          google_canonical?: string | null;
+          user_canonical?: string | null;
+          last_crawl_time?: string | null;
+          crawled_as?: string | null;
+          sitemaps?: string[];
+          ninja_status: NinjaIndexStatus;
+          site_lastmod?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["url_inspection_history"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "url_inspection_history_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<never, never>;
     Functions: {
@@ -905,3 +1019,5 @@ export type SiteAuditIssue = Tables<"site_audit_issues">;
 export type SearchAppearanceDaily = Tables<"search_appearance_daily">;
 export type AiVisibilityPrompt = Tables<"ai_visibility_prompts">;
 export type AiVisibilityObservation = Tables<"ai_visibility_observations">;
+export type UrlInspection = Tables<"url_inspections">;
+export type UrlInspectionHistory = Tables<"url_inspection_history">;

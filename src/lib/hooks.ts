@@ -29,6 +29,9 @@ import {
   getTrackedQueryHistory,
   getTrackedRankKeywords,
   getUptimeSummaries,
+  getUrlInspections,
+  getUrlInspectionHistory,
+  triggerUrlInspection,
   recordAiVisibilityObservation,
   recordRankObservation,
   recordSerpObservation,
@@ -59,6 +62,7 @@ import {
   type TrackedRankKeywordFormValues,
 } from "@/lib/api";
 import { fetchSitePagesInventory } from "@/features/keywords/site-pages-source";
+import { fetchSitemapLastmods } from "@/features/indexing/sitemap-lastmod";
 
 // Stable query keys (brief §21) so manual sync (Phase 5) can invalidate
 // precisely.
@@ -93,6 +97,7 @@ export const queryKeys = {
   commonCrawlRuns: (domain: string) => ["common-crawl-runs", domain] as const,
   sitePagesInventory: (domain: string) =>
     ["site-pages-inventory", domain] as const,
+  siteLastmods: (domain: string) => ["site-lastmods", domain] as const,
   engineQueryPositions: (siteId: string, days: number) =>
     ["engine-query-positions", siteId, days] as const,
   siteAuditRuns: (siteId: string) => ["site-audit-runs", siteId] as const,
@@ -104,6 +109,9 @@ export const queryKeys = {
     ["ai-visibility-prompts", siteId] as const,
   aiVisibilityObservations: (siteId: string) =>
     ["ai-visibility-observations", siteId] as const,
+  urlInspections: (siteId: string) => ["url-inspections", siteId] as const,
+  urlInspectionHistory: (siteId: string, url: string) =>
+    ["url-inspection-history", siteId, url] as const,
 };
 
 export function useSites() {
@@ -415,6 +423,15 @@ export function useSitePagesInventory(domain: string) {
   });
 }
 
+export function useSiteLastmods(domain: string) {
+  return useQuery({
+    queryKey: queryKeys.siteLastmods(domain),
+    queryFn: () => fetchSitemapLastmods(domain),
+    enabled: !!domain,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useCommonCrawlRuns(domain: string) {
   return useQuery({
     queryKey: queryKeys.commonCrawlRuns(domain),
@@ -557,6 +574,50 @@ export function useRecordAiVisibilityObservation(siteId: string) {
       qc.invalidateQueries({
         queryKey: queryKeys.aiVisibilityObservations(siteId),
       });
+    },
+  });
+}
+
+// Indexing / URL Inspection (Ranking Growth Roadmap Phase 4) ----------------
+
+export function useUrlInspections(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.urlInspections(siteId),
+    queryFn: () => getUrlInspections(siteId),
+    enabled: !!siteId,
+  });
+}
+
+/** History for one URL - fetched on demand (e.g. a row expand), not for
+ * every tracked URL up front. */
+export function useUrlInspectionHistory(
+  siteId: string,
+  url: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: queryKeys.urlInspectionHistory(siteId, url),
+    queryFn: () => getUrlInspectionHistory(siteId, url),
+    enabled: enabled && !!siteId && !!url,
+  });
+}
+
+/** On-demand only - never scheduled from the browser (the scheduled batch
+ * runs server-side via pg_cron). See supabase/functions/inspect-urls. */
+export function useTriggerUrlInspection(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      urls: string[];
+      force?: boolean;
+      siteLastmodByUrl?: Record<string, string | null>;
+    }) =>
+      triggerUrlInspection(siteId, args.urls, {
+        force: args.force,
+        siteLastmodByUrl: args.siteLastmodByUrl,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.urlInspections(siteId) });
     },
   });
 }

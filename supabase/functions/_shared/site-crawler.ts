@@ -64,6 +64,28 @@ export function isLikelySitemapIndex(xml: string): boolean {
   return /<sitemapindex[\s>]/i.test(xml);
 }
 
+const SITEMAP_URL_BLOCK_RE = /<url>([\s\S]*?)<\/url>/gi;
+const LOC_RE = /<loc>\s*([^<\s]+)\s*<\/loc>/i;
+const LASTMOD_RE = /<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i;
+
+/** Maps loc -> lastmod for every <url> entry that has both - the real,
+ * first-party "when did our own build last touch this page" signal (Phase 4
+ * indexing tracker's "material change since last Google crawl" detection).
+ * A URL with no <lastmod> is simply absent from the map, never defaulted to
+ * a guessed date. */
+export function parseSitemapLastmods(xml: string): Map<string, string> {
+  const out = new Map<string, string>();
+  let match: RegExpExecArray | null;
+  const re = new RegExp(SITEMAP_URL_BLOCK_RE);
+  while ((match = re.exec(xml)) !== null) {
+    const block = match[1];
+    const loc = LOC_RE.exec(block)?.[1];
+    const lastmod = LASTMOD_RE.exec(block)?.[1];
+    if (loc && lastmod) out.set(loc, lastmod);
+  }
+  return out;
+}
+
 export interface ExtractedPage {
   title: string | null;
   metaDescription: string | null;
