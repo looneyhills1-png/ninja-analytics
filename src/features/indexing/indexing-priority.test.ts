@@ -8,10 +8,13 @@ import {
 import type { KeywordOpportunityRow } from "@/lib/keyword-opportunities";
 import type { UrlInspection } from "@/types/database";
 
-function row(overrides: Partial<KeywordOpportunityRow> = {}): KeywordOpportunityRow {
+function row(
+  overrides: Partial<KeywordOpportunityRow> = {},
+): KeywordOpportunityRow {
   return {
     query: "llandudno chocolate experience tickets",
-    rankingUrl: "https://ninjatickets.com/event/llandudno-chocolate-experience-llandudno/",
+    rankingUrl:
+      "https://ninjatickets.com/event/llandudno-chocolate-experience-llandudno/",
     previousRankingUrl: null,
     competingUrls: [],
     clicks: 0,
@@ -74,7 +77,9 @@ describe("classifyPageType", () => {
   });
   it("classifies a guide URL", () => {
     expect(
-      classifyPageType("https://ninjatickets.com/guides/anastacia-uk-tour-2026-tickets/"),
+      classifyPageType(
+        "https://ninjatickets.com/guides/anastacia-uk-tour-2026-tickets/",
+      ),
     ).toBe("guide");
   });
   it("classifies the homepage", () => {
@@ -120,14 +125,25 @@ describe("buildIndexingCandidates", () => {
       now: NOW,
     });
     const c = candidates.find((x) => x.url === url)!;
-    expect(c.reasons.some((r) => r.includes("after Google's last crawl"))).toBe(true);
-    expect(c.priorityLevel === "high" || c.priorityLevel === "critical").toBe(true);
+    expect(c.reasons.some((r) => r.includes("after Google's last crawl"))).toBe(
+      true,
+    );
+    expect(c.priorityLevel === "high" || c.priorityLevel === "critical").toBe(
+      true,
+    );
   });
 
   it("does not claim a material change when the site lastmod predates Google's last crawl", () => {
     const url = "https://ninjatickets.com/event/some-event/";
     const candidates = buildIndexingCandidates({
-      opportunityRows: [row({ rankingUrl: url, currentPosition: 8, impressions: 50, ctr: 0.02 })],
+      opportunityRows: [
+        row({
+          rankingUrl: url,
+          currentPosition: 8,
+          impressions: 50,
+          ctr: 0.02,
+        }),
+      ],
       siteLastmods: new Map([[url, "2026-09-01"]]),
       inspections: new Map([
         [url, inspection({ url, last_crawl_time: "2026-09-15T00:00:00Z" })],
@@ -135,20 +151,31 @@ describe("buildIndexingCandidates", () => {
       now: NOW,
     });
     const c = candidates.find((x) => x.url === url)!;
-    expect(c.reasons.some((r) => r.includes("after Google's last crawl"))).toBe(false);
+    expect(c.reasons.some((r) => r.includes("after Google's last crawl"))).toBe(
+      false,
+    );
   });
 
   it("gives /event/ pages an affiliate-value reason and technical flags a technical reason", () => {
     const url = "https://ninjatickets.com/event/high-value/";
     const candidates = buildIndexingCandidates({
-      opportunityRows: [row({ rankingUrl: url, currentPosition: 6, impressions: 20, ctr: 0.01 })],
+      opportunityRows: [
+        row({
+          rankingUrl: url,
+          currentPosition: 6,
+          impressions: 20,
+          ctr: 0.01,
+        }),
+      ],
       siteLastmods: new Map(),
       inspections: new Map([[url, inspection({ url })]]),
       technicalFlagsByUrl: new Map([[url, ["noindex", "non-self canonical"]]]),
       now: NOW,
     });
     const c = candidates.find((x) => x.url === url)!;
-    expect(c.reasons.some((r) => r.includes("High-value ticket page"))).toBe(true);
+    expect(c.reasons.some((r) => r.includes("High-value ticket page"))).toBe(
+      true,
+    );
     expect(c.reasons.some((r) => r.includes("Technical concerns"))).toBe(true);
   });
 

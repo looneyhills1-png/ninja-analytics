@@ -165,7 +165,9 @@ function HistoryPanel({ siteId, url }: { siteId: string; url: string }) {
         `Robots ${prev.robots_txt_state ?? "unknown"} -> ${curr.robots_txt_state ?? "unknown"}`,
       );
     }
-    return changes.length > 0 ? changes : ["No change from the previous inspection."];
+    return changes.length > 0
+      ? changes
+      : ["No change from the previous inspection."];
   }
 
   return (
@@ -184,7 +186,9 @@ function HistoryPanel({ siteId, url }: { siteId: string; url: string }) {
         ) : (
           history.map((h, i) => (
             <div key={h.id} className="border-l-2 border-border pl-2">
-              <p className="text-muted-foreground">{relativeTime(h.inspected_at)}</p>
+              <p className="text-muted-foreground">
+                {relativeTime(h.inspected_at)}
+              </p>
               <ul className="list-disc pl-4">
                 {describeChange(h, history[i + 1]).map((c) => (
                   <li key={c}>{c}</li>
@@ -212,9 +216,8 @@ export function IndexingPage() {
   const privacy = usePrivacyMode();
   const sitesQuery = useSites();
   const [params, setParams] = useSearchParams();
-  const [bucketFilter, setBucketFilter] = useState<IndexingSummaryBucket | null>(
-    null,
-  );
+  const [bucketFilter, setBucketFilter] =
+    useState<IndexingSummaryBucket | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("priority");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -274,7 +277,10 @@ export function IndexingPage() {
     ],
   );
 
-  const summary = useMemo(() => summarizeIndexingCandidates(candidates), [candidates]);
+  const summary = useMemo(
+    () => summarizeIndexingCandidates(candidates),
+    [candidates],
+  );
 
   const filtered = useMemo(
     () =>
@@ -285,14 +291,17 @@ export function IndexingPage() {
   );
 
   const sorted = useMemo(
-    () => [...filtered].sort((a, b) => SORTERS[sortKey](b) - SORTERS[sortKey](a)),
+    () =>
+      [...filtered].sort((a, b) => SORTERS[sortKey](b) - SORTERS[sortKey](a)),
     [filtered, sortKey],
   );
 
   const actionQueue = useMemo(
     () =>
       candidates
-        .filter((c) => c.priorityLevel === "critical" || c.priorityLevel === "high")
+        .filter(
+          (c) => c.priorityLevel === "critical" || c.priorityLevel === "high",
+        )
         .slice(0, ACTION_QUEUE_SIZE),
     [candidates],
   );
@@ -365,26 +374,33 @@ export function IndexingPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-            {(Object.keys(BUCKET_LABELS) as IndexingSummaryBucket[]).map((b) => (
-              <button
-                key={b}
-                type="button"
-                onClick={() => setBucketFilter(bucketFilter === b ? null : b)}
-                className={cn(
-                  "rounded-lg border p-3 text-left transition-colors",
-                  bucketFilter === b
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-card hover:bg-muted/50",
-                )}
-              >
-                <p className="text-xs font-medium text-muted-foreground">
-                  {BUCKET_LABELS[b]}
-                </p>
-                <p className={cn("mt-1 text-xl font-bold tabular-nums", BUCKET_TONE[b])}>
-                  {summary[b]}
-                </p>
-              </button>
-            ))}
+            {(Object.keys(BUCKET_LABELS) as IndexingSummaryBucket[]).map(
+              (b) => (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => setBucketFilter(bucketFilter === b ? null : b)}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    bucketFilter === b
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-card hover:bg-muted/50",
+                  )}
+                >
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {BUCKET_LABELS[b]}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-xl font-bold tabular-nums",
+                      BUCKET_TONE[b],
+                    )}
+                  >
+                    {summary[b]}
+                  </p>
+                </button>
+              ),
+            )}
           </div>
 
           {inspectMutation.error && (
@@ -499,13 +515,23 @@ export function IndexingPage() {
                         <th className="px-2 py-2 font-medium">Type</th>
                         <th className="px-2 py-2 font-medium">Index status</th>
                         <th className="px-2 py-2 font-medium">Last crawl</th>
-                        <th className="px-2 py-2 font-medium">Canonical (Google / declared)</th>
+                        <th className="px-2 py-2 font-medium">
+                          Canonical (Google / declared)
+                        </th>
                         <th className="px-2 py-2 font-medium">Robots</th>
                         <th className="px-2 py-2 font-medium">Sitemap</th>
-                        <th className="px-2 py-2 text-right font-medium">Impr.</th>
-                        <th className="px-2 py-2 text-right font-medium">Clicks</th>
-                        <th className="px-2 py-2 text-right font-medium">Pos.</th>
-                        <th className="px-2 py-2 text-right font-medium">Opp. score</th>
+                        <th className="px-2 py-2 text-right font-medium">
+                          Impr.
+                        </th>
+                        <th className="px-2 py-2 text-right font-medium">
+                          Clicks
+                        </th>
+                        <th className="px-2 py-2 text-right font-medium">
+                          Pos.
+                        </th>
+                        <th className="px-2 py-2 text-right font-medium">
+                          Opp. score
+                        </th>
                         <th className="px-2 py-2 font-medium">Priority</th>
                         <th className="px-2 py-2 font-medium">Actions</th>
                       </tr>
@@ -579,7 +605,11 @@ export function IndexingPage() {
                               {insp?.robots_txt_state ?? "-"}
                             </td>
                             <td className="px-2 py-2 text-xs text-muted-foreground">
-                              {insp ? (insp.sitemaps.length > 0 ? "Yes" : "No") : "-"}
+                              {insp
+                                ? insp.sitemaps.length > 0
+                                  ? "Yes"
+                                  : "No"
+                                : "-"}
                             </td>
                             <td className="px-2 py-2 text-right tabular-nums">
                               {formatNumber(c.impressions)}

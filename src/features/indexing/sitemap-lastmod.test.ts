@@ -16,7 +16,9 @@ describe("parseSitemapLastmods", () => {
     const map = parseSitemapLastmods(SITEMAP_XML);
     expect(map.size).toBe(2);
     expect(
-      map.get("https://ninjatickets.com/guides/anastacia-uk-tour-2026-tickets/"),
+      map.get(
+        "https://ninjatickets.com/guides/anastacia-uk-tour-2026-tickets/",
+      ),
     ).toBe("2026-09-22");
     expect(map.has("https://ninjatickets.com/")).toBe(false);
   });
@@ -30,7 +32,9 @@ describe("fetchSitemapLastmods", () => {
   it("fetches and parses the site's real sitemap.xml", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, text: async () => SITEMAP_XML }) as Response),
+      vi.fn(
+        async () => ({ ok: true, text: async () => SITEMAP_XML }) as Response,
+      ),
     );
     const map = await fetchSitemapLastmods("ninjatickets.com");
     expect(map.get("https://ninjatickets.com/event/oasis-tickets/")).toBe(

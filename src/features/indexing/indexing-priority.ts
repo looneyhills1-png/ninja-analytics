@@ -119,7 +119,11 @@ function ctrGapFactor(
   ctr: number | null,
   position: number | null,
 ): { value: number; reason: string | null } {
-  if (impressions < MIN_IMPRESSIONS_FOR_CANDIDATE || ctr == null || position == null) {
+  if (
+    impressions < MIN_IMPRESSIONS_FOR_CANDIDATE ||
+    ctr == null ||
+    position == null
+  ) {
     return { value: 0, reason: null };
   }
   const expected = expectedCtrForPosition(position);
@@ -140,7 +144,8 @@ function affiliateValueFactor(pageType: IndexingPageType): {
   if (pageType === "event") {
     return {
       value: 1,
-      reason: "High-value ticket page (/event/) - direct affiliate/commercial relevance.",
+      reason:
+        "High-value ticket page (/event/) - direct affiliate/commercial relevance.",
     };
   }
   return { value: 0, reason: null };
@@ -189,13 +194,18 @@ function freshnessFactor(
       reason: "Never inspected - indexing status unknown.",
     };
   }
-  if (!siteLastmod || !inspection.last_crawl_time) return { value: 0, reason: null };
+  if (!siteLastmod || !inspection.last_crawl_time)
+    return { value: 0, reason: null };
   const lastmodDate = new Date(siteLastmod);
   const crawlDate = new Date(inspection.last_crawl_time);
-  if (Number.isNaN(lastmodDate.getTime()) || Number.isNaN(crawlDate.getTime())) {
+  if (
+    Number.isNaN(lastmodDate.getTime()) ||
+    Number.isNaN(crawlDate.getTime())
+  ) {
     return { value: 0, reason: null };
   }
-  if (lastmodDate.getTime() <= crawlDate.getTime()) return { value: 0, reason: null };
+  if (lastmodDate.getTime() <= crawlDate.getTime())
+    return { value: 0, reason: null };
   return {
     value: 1,
     reason: `Page content changed on ${siteLastmod}, after Google's last crawl (${inspection.last_crawl_time.slice(0, 10)}) - Google may be serving stale info.`,
@@ -237,7 +247,8 @@ export function buildIndexingCandidates(
   // Best (highest opportunity score) row per ranking URL.
   const bestRowByUrl = new Map<string, KeywordOpportunityRow>();
   for (const row of input.opportunityRows) {
-    if (!row.rankingUrl || row.impressions < MIN_IMPRESSIONS_FOR_CANDIDATE) continue;
+    if (!row.rankingUrl || row.impressions < MIN_IMPRESSIONS_FOR_CANDIDATE)
+      continue;
     const existing = bestRowByUrl.get(row.rankingUrl);
     if (!existing || row.score.score > existing.score.score) {
       bestRowByUrl.set(row.rankingUrl, row);
@@ -250,7 +261,10 @@ export function buildIndexingCandidates(
     ...[...input.siteLastmods.entries()]
       .filter(([, lastmod]) => {
         const d = new Date(lastmod);
-        return !Number.isNaN(d.getTime()) && daysBetween(now, d) <= NEWLY_PUBLISHED_WINDOW_DAYS;
+        return (
+          !Number.isNaN(d.getTime()) &&
+          daysBetween(now, d) <= NEWLY_PUBLISHED_WINDOW_DAYS
+        );
       })
       .map(([url]) => url),
   ]);
@@ -314,7 +328,10 @@ export function buildIndexingCandidates(
       technicalFlags,
       priorityScore,
       priorityLevel: priorityLevelFor(priorityScore),
-      reasons: reasons.length > 0 ? reasons : ["No strong signal - included for visibility only."],
+      reasons:
+        reasons.length > 0
+          ? reasons
+          : ["No strong signal - included for visibility only."],
     });
   }
 

@@ -24,7 +24,9 @@ import { inspectAndStoreUrls } from "../_shared/gsc-url-inspection.ts";
 // the UI's job; this batch is just steady-state freshness upkeep).
 const MAX_URLS_PER_SITE = 8;
 
-async function fetchSiteLastmods(websiteUrl: string): Promise<Map<string, string>> {
+async function fetchSiteLastmods(
+  websiteUrl: string,
+): Promise<Map<string, string>> {
   try {
     const origin = new URL(websiteUrl).origin;
     const res = await fetchWithRetry(
