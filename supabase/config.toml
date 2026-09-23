@@ -108,5 +108,11 @@ verify_jwt = false
 [functions.common-crawl-sync]
 verify_jwt = false
 
+[functions.inspect-urls]
+verify_jwt = false
+
+[functions.scheduled-inspect-urls]
+verify_jwt = false
+
 [analytics]
 enabled = false
