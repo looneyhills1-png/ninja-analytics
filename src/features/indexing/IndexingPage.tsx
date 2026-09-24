@@ -8,7 +8,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import {
-  useKeywordOpportunities,
+  useGscCoverageSnapshots,\n  useKeywordOpportunities,
   useLatestSiteAuditPages,
   useSiteLastmods,
   useSites,
@@ -44,7 +44,7 @@ const BUCKET_LABELS: Record<IndexingSummaryBucket, string> = {
   discovered_not_indexed: "Discovered but not indexed",
   canonical_mismatch: "Canonical mismatch",
   blocked: "Blocked",
-  never_inspected: "Never inspected",
+  never_inspected: "Not individually inspected",
 };
 
 const BUCKET_TONE: Record<IndexingSummaryBucket, string> = {
@@ -249,7 +249,7 @@ export function IndexingPage() {
     setSelected(new Set());
   }
 
-  const opportunitiesQuery = useKeywordOpportunities(siteId, DAYS);
+  const coverageQuery = useGscCoverageSnapshots(siteId);\n  const opportunitiesQuery = useKeywordOpportunities(siteId, DAYS);
   const inspectionsQuery = useUrlInspections(siteId);
   const lastmodsQuery = useSiteLastmods(site?.domain ?? "");
   const auditQuery = useLatestSiteAuditPages(siteId);
@@ -295,6 +295,13 @@ export function IndexingPage() {
     () => summarizeIndexingCandidates(candidates),
     [candidates],
   );
+
+  const latestCoverage = useMemo(() => {
+    const rows = coverageQuery.data ?? [];
+    return rows.length > 0 ? rows[rows.length - 1] : null;
+  }, [coverageQuery.data]);
+
+  const inspectedTotal = (inspectionsQuery.data ?? []).length;
 
   const filtered = useMemo(
     () =>
@@ -383,10 +390,40 @@ export function IndexingPage() {
         </select>
       </div>
 
-      {opportunitiesQuery.isLoading || inspectionsQuery.isLoading ? (
+      {coverageQuery.isLoading || opportunitiesQuery.isLoading || inspectionsQuery.isLoading ? (
         <Skeleton className="h-40" />
       ) : (
         <>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Card>
+              <div className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Google indexed coverage
+                </p>
+                <p className="mt-1 text-3xl font-bold tabular-nums text-success">
+                  {latestCoverage ? formatNumber(latestCoverage.affected_pages) : "-"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Search Console Coverage export
+                  {latestCoverage ? ` · ${latestCoverage.metric_date}` : ""}
+                </p>
+              </div>
+            </Card>
+            <Card>
+              <div className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Individually inspected
+                </p>
+                <p className="mt-1 text-3xl font-bold tabular-nums">
+                  {formatNumber(inspectedTotal)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  URL Inspection API checks · {summary.indexed} indexed · {summary.blocked} blocked
+                </p>
+              </div>
+            </Card>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {(Object.keys(BUCKET_LABELS) as IndexingSummaryBucket[]).map(
               (b) => (
