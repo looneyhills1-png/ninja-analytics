@@ -131,13 +131,18 @@ function RequestIndexingPanel({
             <Copy className="h-3 w-3" /> {copied ? "Copied" : "Copy URL"}
           </Button>
           <a
-            href={\n              inspectionLink ??\n              "https://search.google.com/search-console/welcome?action=inspect"\n            }
+            href={
+              inspectionLink ??
+              "https://search.google.com/search-console/welcome?action=inspect"
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-medium text-muted-foreground hover:border-primary hover:text-primary"
           >
             <ExternalLink className="h-3 w-3" />
-            {inspectionLink\n              ? "Open this inspection in Search Console"\n              : "Open URL Inspection"}
+            {inspectionLink
+              ? "Open this inspection in Search Console"
+              : "Open URL Inspection"}
           </a>
         </div>
       </div>
