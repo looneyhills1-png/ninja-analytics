@@ -16,7 +16,7 @@ import {
   getCommonCrawlRuns,
   getCompetitorDomains,
   getEngineQueryPositions,
-  getIntegrationStatuses,
+  getGscCoverageSnapshots,\n  getIntegrationStatuses,
   getKeywordOpportunities,
   getObservedSerpResults,
   getPortfolioPageDaily,
@@ -109,7 +109,7 @@ export const queryKeys = {
     ["ai-visibility-prompts", siteId] as const,
   aiVisibilityObservations: (siteId: string) =>
     ["ai-visibility-observations", siteId] as const,
-  urlInspections: (siteId: string) => ["url-inspections", siteId] as const,
+  gscCoverageSnapshots: (siteId: string) => ["gsc-coverage-snapshots", siteId] as const,\n  urlInspections: (siteId: string) => ["url-inspections", siteId] as const,
   urlInspectionHistory: (siteId: string, url: string) =>
     ["url-inspection-history", siteId, url] as const,
 };
