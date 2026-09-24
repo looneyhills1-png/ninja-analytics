@@ -80,21 +80,29 @@ function shortPath(url: string): string {
   }
 }
 
-/** A real, documented Search Console deep link (used by Google's own
- * site-kit plugin) - only built when we actually have a gsc_property to
- * anchor it to. Never invented for a property we don't know. */
-function searchConsoleInspectUrl(gscProperty: string, url: string): string {
-  return `https://search.google.com/search-console/inspect?resource_id=${encodeURIComponent(
-    gscProperty,
-  )}&id=${encodeURIComponent(url)}`;
+function inspectionResultLink(insp: UrlInspection | null): string | null {
+  const raw = insp?.raw_response;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const inspectionResult = (raw as Record<string, unknown>).inspectionResult;
+  if (
+    !inspectionResult ||
+    typeof inspectionResult !== "object" ||
+    Array.isArray(inspectionResult)
+  ) {
+    return null;
+  }
+  const link = (inspectionResult as Record<string, unknown>).inspectionResultLink;
+  return typeof link === "string" && link.startsWith("https://search.google.com/")
+    ? link
+    : null;
 }
 
 function RequestIndexingPanel({
   url,
-  gscProperty,
+  inspectionLink,
 }: {
   url: string;
-  gscProperty: string | null;
+  inspectionLink: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -122,16 +130,15 @@ function RequestIndexingPanel({
           >
             <Copy className="h-3 w-3" /> {copied ? "Copied" : "Copy URL"}
           </Button>
-          {gscProperty && (
-            <a
-              href={searchConsoleInspectUrl(gscProperty, url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-medium text-muted-foreground hover:border-primary hover:text-primary"
-            >
-              <ExternalLink className="h-3 w-3" /> Open in Search Console
-            </a>
-          )}
+          <a
+            href={inspectionLink ?? "https://search.google.com/search-console/welcome?action=inspect"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-medium text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {inspectionLink ? "Open this inspection in Search Console" : "Open URL Inspection"}
+          </a>
         </div>
       </div>
     </details>
@@ -455,7 +462,7 @@ export function IndexingPage() {
                       </div>
                       <RequestIndexingPanel
                         url={c.url}
-                        gscProperty={site?.gsc_property ?? null}
+                        inspectionLink={inspectionResultLink(c.inspection)}
                       />
                     </div>
                   </Card>
@@ -645,7 +652,7 @@ export function IndexingPage() {
                               </Button>
                               <RequestIndexingPanel
                                 url={c.url}
-                                gscProperty={site?.gsc_property ?? null}
+                                inspectionLink={inspectionResultLink(insp)}
                               />
                             </td>
                           </tr>
