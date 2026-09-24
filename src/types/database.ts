@@ -1050,5 +1050,5 @@ export type SiteAuditIssue = Tables<"site_audit_issues">;
 export type SearchAppearanceDaily = Tables<"search_appearance_daily">;
 export type AiVisibilityPrompt = Tables<"ai_visibility_prompts">;
 export type AiVisibilityObservation = Tables<"ai_visibility_observations">;
-export type UrlInspection = Tables<"url_inspections">;
+export type GscCoverageSnapshot = Tables<"gsc_coverage_snapshots">;\nexport type UrlInspection = Tables<"url_inspections">;
 export type UrlInspectionHistory = Tables<"url_inspection_history">;
