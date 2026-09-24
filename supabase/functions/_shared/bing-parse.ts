@@ -40,6 +40,12 @@ export interface BingApiRow {
   Impressions?: number;
 }
 
+export interface BingQueryStatsRow extends BingApiRow {
+  Query?: string;
+  AvgClickPosition?: number;
+  AvgImpressionPosition?: number;
+}
+
 export interface BingSiteRecord {
   Url?: string;
   IsVerified?: boolean;
@@ -132,4 +138,103 @@ export function normalizeBingRows(
     });
   }
   return [...byDate.values()].slice(0, maxRows);
+}
+
+
+export interface BingTermDailyRow {
+  site_id: string;
+  engine: "bing";
+  metric_date: string;
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number | null;
+  average_position: number | null;
+  updated_at: string;
+}
+
+export interface BingPageDailyRow {
+  site_id: string;
+  engine: "bing";
+  metric_date: string;
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number | null;
+  average_position: number | null;
+  updated_at: string;
+}
+
+function finiteNumber(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function statsMetrics(r: BingQueryStatsRow) {
+  const clicks = toInt(r.Clicks);
+  const impressions = toInt(r.Impressions);
+  const average_position = finiteNumber(r.AvgImpressionPosition);
+  return {
+    clicks,
+    impressions,
+    ctr: impressions > 0 ? clicks / impressions : null,
+    average_position,
+  };
+}
+
+/**
+ * Bing's GetQueryStats returns weekly-updated keyword rows. Preserve the
+ * provider's own Date and Query rather than pretending these are daily web
+ * search totals. Rows are deduped by date+query for safe upsert.
+ */
+export function normalizeBingQueryRows(
+  rows: BingQueryStatsRow[] | undefined,
+  siteId: string,
+  updatedAt: string,
+  maxRows = 5000,
+): BingTermDailyRow[] {
+  const byKey = new Map<string, BingTermDailyRow>();
+  for (const r of rows ?? []) {
+    const metric_date = parseMicrosoftDate(r.Date);
+    const query = typeof r.Query === "string" ? r.Query.trim() : "";
+    if (!metric_date || !query) continue;
+    const m = statsMetrics(r);
+    byKey.set(`${metric_date}\u0000${query}`, {
+      site_id: siteId,
+      engine: "bing",
+      metric_date,
+      query,
+      ...m,
+      updated_at: updatedAt,
+    });
+  }
+  return [...byKey.values()].slice(0, maxRows);
+}
+
+/**
+ * Bing's GetPageStats uses the Query field to carry the page URL. Store it
+ * in search_page_daily.page and retain Bing's impressions/clicks/position.
+ */
+export function normalizeBingPageRows(
+  rows: BingQueryStatsRow[] | undefined,
+  siteId: string,
+  updatedAt: string,
+  maxRows = 5000,
+): BingPageDailyRow[] {
+  const byKey = new Map<string, BingPageDailyRow>();
+  for (const r of rows ?? []) {
+    const metric_date = parseMicrosoftDate(r.Date);
+    const page = typeof r.Query === "string" ? r.Query.trim() : "";
+    if (!metric_date || !page) continue;
+    const m = statsMetrics(r);
+    byKey.set(`${metric_date}\u0000${page}`, {
+      site_id: siteId,
+      engine: "bing",
+      metric_date,
+      page,
+      ...m,
+      updated_at: updatedAt,
+    });
+  }
+  return [...byKey.values()].slice(0, maxRows);
 }
