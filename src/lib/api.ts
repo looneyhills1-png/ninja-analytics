@@ -14,7 +14,7 @@ import {
   type PortfolioExportComputed,
 } from "@/lib/portfolio-export";
 import type {
-  AiVisibilityObservation,
+  AiVisibilityObservation,\n  BingAiCitedPage,\n  BingAiPerformanceSnapshot,
   AiVisibilityPrompt,
   AiVisibilitySource,
   AnalyticsDaily,
