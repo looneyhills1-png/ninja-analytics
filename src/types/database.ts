@@ -860,6 +860,62 @@ export interface Database {
           },
         ];
       };
+      bing_ai_performance_snapshots: {
+        Row: {
+          id: string;
+          site_id: string;
+          captured_at: string;
+          range_label: string;
+          total_citations: number;
+          average_cited_pages: number | null;
+          source: string;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          captured_at?: string;
+          range_label: string;
+          total_citations: number;
+          average_cited_pages?: number | null;
+          source?: string;
+          notes?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["bing_ai_performance_snapshots"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "bing_ai_performance_snapshots_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      bing_ai_cited_pages: {
+        Row: {
+          snapshot_id: string;
+          page_url: string;
+          citations: number;
+        };
+        Insert: {
+          snapshot_id: string;
+          page_url: string;
+          citations: number;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["bing_ai_cited_pages"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "bing_ai_cited_pages_snapshot_id_fkey";
+            columns: ["snapshot_id"];
+            referencedRelation: "bing_ai_performance_snapshots";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       gsc_coverage_snapshots: {
         Row: {
           site_id: string;
@@ -1050,6 +1106,8 @@ export type SiteAuditIssue = Tables<"site_audit_issues">;
 export type SearchAppearanceDaily = Tables<"search_appearance_daily">;
 export type AiVisibilityPrompt = Tables<"ai_visibility_prompts">;
 export type AiVisibilityObservation = Tables<"ai_visibility_observations">;
+export type BingAiPerformanceSnapshot = Tables<"bing_ai_performance_snapshots">;
+export type BingAiCitedPage = Tables<"bing_ai_cited_pages">;
 export type GscCoverageSnapshot = Tables<"gsc_coverage_snapshots">;
 export type UrlInspection = Tables<"url_inspections">;
 export type UrlInspectionHistory = Tables<"url_inspection_history">;
