@@ -127,9 +127,15 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
 
   const updatedAt = new Date().toISOString();
   const [rawRows, rawQueryRows, rawPageRows] = await Promise.all([
-    callBing("GetRankAndTrafficStats", apiKey, { siteUrl: matched.Url }) as Promise<BingApiRow[]>,
-    callBing("GetQueryStats", apiKey, { siteUrl: matched.Url }) as Promise<BingQueryStatsRow[]>,
-    callBing("GetPageStats", apiKey, { siteUrl: matched.Url }) as Promise<BingQueryStatsRow[]>,
+    callBing("GetRankAndTrafficStats", apiKey, {
+      siteUrl: matched.Url,
+    }) as Promise<BingApiRow[]>,
+    callBing("GetQueryStats", apiKey, { siteUrl: matched.Url }) as Promise<
+      BingQueryStatsRow[]
+    >,
+    callBing("GetPageStats", apiKey, { siteUrl: matched.Url }) as Promise<
+      BingQueryStatsRow[]
+    >,
   ]);
 
   const rows = normalizeBingRows(rawRows, site.id, updatedAt);
@@ -165,8 +171,7 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
       aggregateRowsFetched: rawRows.length,
       queryRowsFetched: rawQueryRows.length,
       pageRowsFetched: rawPageRows.length,
-      note:
-        "GetQueryStats/GetPageStats are weekly-updated Bing Webmaster datasets; aggregate traffic includes Web, Chat and other Bing verticals.",
+      note: "GetQueryStats/GetPageStats are weekly-updated Bing Webmaster datasets; aggregate traffic includes Web, Chat and other Bing verticals.",
     },
   };
 };

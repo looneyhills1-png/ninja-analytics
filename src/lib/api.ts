@@ -1346,6 +1346,35 @@ export async function getAiVisibilityObservations(
   );
 }
 
+export interface BingAiPerformance {
+  snapshot: BingAiPerformanceSnapshot | null;
+  pages: BingAiCitedPage[];
+}
+
+/** Latest explicitly sourced Bing Webmaster Tools AI Performance snapshot. */
+export async function getLatestBingAiPerformance(
+  siteId: string,
+): Promise<BingAiPerformance> {
+  const { data: snapshot, error: snapshotError } = await supabase
+    .from("bing_ai_performance_snapshots")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (snapshotError) throw snapshotError;
+  if (!snapshot) return { snapshot: null, pages: [] };
+
+  const { data: pages, error: pagesError } = await supabase
+    .from("bing_ai_cited_pages")
+    .select("*")
+    .eq("snapshot_id", snapshot.id)
+    .order("citations", { ascending: false });
+  if (pagesError) throw pagesError;
+
+  return { snapshot, pages: pages ?? [] };
+}
+
 export interface AiObservationInput {
   siteId: string;
   promptId: string | null;

@@ -127,10 +127,10 @@ export function AiVisibilityPage() {
           <h1 className="text-xl font-semibold">AI Visibility</h1>
           <p className="text-sm text-muted-foreground">
             Coverage across ChatGPT, Gemini, Copilot, Claude, Siri, Alexa,
-            Yahoo, DuckDuckGo, Brave, Ecosia, Dogpile, Perplexity and more.
-            Bing Webmaster Tools now exposes first-party AI citation data in
-            its portal; Microsoft has not published an official API for that
-            AI Performance dataset yet, so imported snapshots are labelled.
+            Yahoo, DuckDuckGo, Brave, Ecosia, Dogpile, Perplexity and more. Bing
+            Webmaster Tools now exposes first-party AI citation data in its
+            portal; Microsoft has not published an official API for that AI
+            Performance dataset yet, so imported snapshots are labelled.
           </p>
         </div>
         <select
@@ -310,10 +310,10 @@ function CoverageTab({
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Bing AI Performance</h2>
         <p className="text-xs text-muted-foreground">
-          First-party citation data from Bing Webmaster Tools. Microsoft has
-          not published an official API for AI Performance yet, so this block
-          shows the latest explicitly sourced imported snapshot rather than
-          pretending it is live API data.
+          First-party citation data from Bing Webmaster Tools. Microsoft has not
+          published an official API for AI Performance yet, so this block shows
+          the latest explicitly sourced imported snapshot rather than pretending
+          it is live API data.
         </p>
         {bingAiLoading ? (
           <Skeleton className="h-32" />
@@ -327,14 +327,18 @@ function CoverageTab({
             <div className="space-y-3 p-4">
               <div className="flex flex-wrap gap-6">
                 <div>
-                  <p className="text-xs text-muted-foreground">Total citations</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total citations
+                  </p>
                   <p className="text-2xl font-bold tabular-nums">
                     {formatNumber(bingAi.snapshot.total_citations)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Report range</p>
-                  <p className="text-sm font-medium">{bingAi.snapshot.range_label}</p>
+                  <p className="text-sm font-medium">
+                    {bingAi.snapshot.range_label}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Captured</p>
@@ -349,14 +353,23 @@ function CoverageTab({
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         <th className="py-2 font-medium">Cited page</th>
-                        <th className="py-2 text-right font-medium">Citations</th>
+                        <th className="py-2 text-right font-medium">
+                          Citations
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {bingAi.pages.map((p) => (
-                        <tr key={p.page_url} className="border-b border-border last:border-0">
-                          <td className="max-w-[34rem] truncate py-2">{p.page_url}</td>
-                          <td className="py-2 text-right tabular-nums">{p.citations}</td>
+                        <tr
+                          key={p.page_url}
+                          className="border-b border-border last:border-0"
+                        >
+                          <td className="max-w-[34rem] truncate py-2">
+                            {p.page_url}
+                          </td>
+                          <td className="py-2 text-right tabular-nums">
+                            {p.citations}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

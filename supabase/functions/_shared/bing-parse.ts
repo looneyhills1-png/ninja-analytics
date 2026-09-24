@@ -140,7 +140,6 @@ export function normalizeBingRows(
   return [...byDate.values()].slice(0, maxRows);
 }
 
-
 export interface BingTermDailyRow {
   site_id: string;
   engine: "bing";

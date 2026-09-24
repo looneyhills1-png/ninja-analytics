@@ -111,6 +111,8 @@ export const queryKeys = {
     ["ai-visibility-prompts", siteId] as const,
   aiVisibilityObservations: (siteId: string) =>
     ["ai-visibility-observations", siteId] as const,
+  bingAiPerformance: (siteId: string) =>
+    ["bing-ai-performance", siteId] as const,
   gscCoverageSnapshots: (siteId: string) =>
     ["gsc-coverage-snapshots", siteId] as const,
   urlInspections: (siteId: string) => ["url-inspections", siteId] as const,

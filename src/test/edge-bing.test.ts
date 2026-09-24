@@ -174,18 +174,19 @@ describe("hasEmbeddedBingError", () => {
   });
 });
 
-
 describe("normalizeBingQueryRows", () => {
   it("maps Bing keyword rows including CTR and average impression position", () => {
     const rows = normalizeBingQueryRows(
-      [{
-        Date: "/Date(1718841600000+0000)/",
-        Query: "ninjatickets",
-        Clicks: 2,
-        Impressions: 3,
-        AvgClickPosition: 8,
-        AvgImpressionPosition: 8.33,
-      }],
+      [
+        {
+          Date: "/Date(1718841600000+0000)/",
+          Query: "ninjatickets",
+          Clicks: 2,
+          Impressions: 3,
+          AvgClickPosition: 8,
+          AvgImpressionPosition: 8.33,
+        },
+      ],
       SITE,
       UPDATED,
     );
@@ -206,13 +207,15 @@ describe("normalizeBingQueryRows", () => {
 describe("normalizeBingPageRows", () => {
   it("maps GetPageStats Query field to the page URL", () => {
     const rows = normalizeBingPageRows(
-      [{
-        Date: "/Date(1718841600000+0000)/",
-        Query: "https://ninjatickets.com/festivals/",
-        Clicks: 1,
-        Impressions: 9,
-        AvgImpressionPosition: 4,
-      }],
+      [
+        {
+          Date: "/Date(1718841600000+0000)/",
+          Query: "https://ninjatickets.com/festivals/",
+          Clicks: 1,
+          Impressions: 9,
+          AvgImpressionPosition: 4,
+        },
+      ],
       SITE,
       UPDATED,
     );
