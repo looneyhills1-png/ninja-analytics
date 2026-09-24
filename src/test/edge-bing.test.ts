@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeBingRows,
+  normalizeBingQueryRows,
+  normalizeBingPageRows,
   parseMicrosoftDate,
   findMatchingBingSite,
   hasEmbeddedBingError,
@@ -169,5 +171,61 @@ describe("hasEmbeddedBingError", () => {
     expect(hasEmbeddedBingError([])).toBe(true);
     expect(hasEmbeddedBingError("oops")).toBe(true);
     expect(hasEmbeddedBingError(null)).toBe(true);
+  });
+});
+
+
+describe("normalizeBingQueryRows", () => {
+  it("maps Bing keyword rows including CTR and average impression position", () => {
+    const rows = normalizeBingQueryRows(
+      [{
+        Date: "/Date(1718841600000+0000)/",
+        Query: "ninjatickets",
+        Clicks: 2,
+        Impressions: 3,
+        AvgClickPosition: 8,
+        AvgImpressionPosition: 8.33,
+      }],
+      SITE,
+      UPDATED,
+    );
+    expect(rows[0]).toEqual({
+      site_id: SITE,
+      engine: "bing",
+      metric_date: "2024-06-20",
+      query: "ninjatickets",
+      clicks: 2,
+      impressions: 3,
+      ctr: 2 / 3,
+      average_position: 8.33,
+      updated_at: UPDATED,
+    });
+  });
+});
+
+describe("normalizeBingPageRows", () => {
+  it("maps GetPageStats Query field to the page URL", () => {
+    const rows = normalizeBingPageRows(
+      [{
+        Date: "/Date(1718841600000+0000)/",
+        Query: "https://ninjatickets.com/festivals/",
+        Clicks: 1,
+        Impressions: 9,
+        AvgImpressionPosition: 4,
+      }],
+      SITE,
+      UPDATED,
+    );
+    expect(rows[0]).toEqual({
+      site_id: SITE,
+      engine: "bing",
+      metric_date: "2024-06-20",
+      page: "https://ninjatickets.com/festivals/",
+      clicks: 1,
+      impressions: 9,
+      ctr: 1 / 9,
+      average_position: 4,
+      updated_at: UPDATED,
+    });
   });
 });
