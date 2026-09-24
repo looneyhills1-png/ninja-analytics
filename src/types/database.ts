@@ -860,6 +860,37 @@ export interface Database {
           },
         ];
       };
+      gsc_coverage_snapshots: {
+        Row: {
+          site_id: string;
+          metric_date: string;
+          coverage_label: string;
+          affected_pages: number;
+          sitemap: string | null;
+          imported_at: string;
+          source: string;
+        };
+        Insert: {
+          site_id: string;
+          metric_date: string;
+          coverage_label?: string;
+          affected_pages: number;
+          sitemap?: string | null;
+          imported_at?: string;
+          source?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["gsc_coverage_snapshots"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "gsc_coverage_snapshots_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       url_inspections: {
         Row: {
           site_id: string;
