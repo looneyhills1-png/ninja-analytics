@@ -47,6 +47,10 @@ export interface GoogleIndexStatusResult {
 export interface NormalizedInspection extends GoogleIndexStatusResult {
   url: string;
   ninjaStatus: NinjaIndexStatus;
+  /** Google's own real deep link into the Search Console UI for this exact
+   * inspection result (inspectionResult.inspectionResultLink) - never
+   * fabricated. Null when Google's response didn't include one. */
+  inspectionResultLink: string | null;
   raw: unknown;
 }
 
@@ -119,6 +123,7 @@ interface RawIndexStatusResult {
 interface RawInspectionResponse {
   inspectionResult?: {
     indexStatusResult?: RawIndexStatusResult;
+    inspectionResultLink?: string;
   };
 }
 
@@ -184,6 +189,7 @@ export async function inspectUrlWithGoogle(
     ...base,
     url: inspectionUrl,
     ninjaStatus: classifyIndexStatus(base),
+    inspectionResultLink: data.inspectionResult?.inspectionResultLink ?? null,
     raw: data,
   };
 }
@@ -274,6 +280,7 @@ export async function inspectAndStoreUrls(
         ninja_status: inspection.ninjaStatus,
         site_lastmod: siteLastmod,
         raw_response: inspection.raw,
+        inspection_result_link: inspection.inspectionResultLink,
         updated_at: now,
       };
 
@@ -301,6 +308,7 @@ export async function inspectAndStoreUrls(
           sitemaps: inspection.sitemaps,
           ninja_status: inspection.ninjaStatus,
           site_lastmod: siteLastmod,
+          inspection_result_link: inspection.inspectionResultLink,
         });
       if (historyError) throw historyError;
 

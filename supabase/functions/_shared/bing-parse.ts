@@ -40,10 +40,38 @@ export interface BingApiRow {
   Impressions?: number;
 }
 
+/**
+ * Shape of one row from Bing's GetQueryStats AND GetPageStats - confirmed
+ * live 2026-09-24 via the diagnose-bing report: both endpoints return the
+ * same `QueryStats` object shape, and GetPageStats genuinely puts the page
+ * URL in the `Query` field (not a separate `PageURL`/`Page` field - a real
+ * Bing API quirk, not a bug in this app).
+ */
 export interface BingQueryStatsRow extends BingApiRow {
   Query?: string;
   AvgClickPosition?: number;
   AvgImpressionPosition?: number;
+}
+
+/** One row from Bing's GetCrawlStats - daily crawl/index health counters,
+ * confirmed live 2026-09-24 (InIndex, CrawledPages, CrawlErrors etc. all
+ * genuinely populated for ninjatickets.com). */
+export interface BingCrawlStatsApiRow {
+  Date?: string;
+  CrawledPages?: number;
+  InIndex?: number;
+  InLinks?: number;
+  CrawlErrors?: number;
+  DnsFailures?: number;
+  BlockedByRobotsTxt?: number;
+  Code2xx?: number;
+  Code301?: number;
+  Code302?: number;
+  Code4xx?: number;
+  Code5xx?: number;
+  ContainsMalware?: number;
+  ConnectionTimeout?: number;
+  AllOtherCodes?: number;
 }
 
 export interface BingSiteRecord {
@@ -236,4 +264,66 @@ export function normalizeBingPageRows(
     });
   }
   return [...byKey.values()].slice(0, maxRows);
+}
+
+export interface BingCrawlStatsDailyRow {
+  site_id: string;
+  metric_date: string;
+  crawled_pages: number | null;
+  in_index: number | null;
+  in_links: number | null;
+  crawl_errors: number | null;
+  dns_failures: number | null;
+  blocked_by_robots_txt: number | null;
+  code_2xx: number | null;
+  code_301: number | null;
+  code_302: number | null;
+  code_4xx: number | null;
+  code_5xx: number | null;
+  contains_malware: number | null;
+  connection_timeout: number | null;
+  all_other_codes: number | null;
+  updated_at: string;
+}
+
+function intOrNull(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  const n = typeof value === "number" ? value : parseInt(String(value), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Maps Bing's GetCrawlStats `d` array into bing_crawl_stats_daily rows -
+ * genuinely available Bing discovery/crawl-health data (InIndex is Bing's
+ * own count of this site's indexed pages), distinct from search performance. */
+export function normalizeBingCrawlStatsRows(
+  rows: BingCrawlStatsApiRow[] | undefined,
+  siteId: string,
+  updatedAt: string,
+  maxRows = 1000,
+): BingCrawlStatsDailyRow[] {
+  const byDate = new Map<string, BingCrawlStatsDailyRow>();
+  for (const r of rows ?? []) {
+    const metric_date = parseMicrosoftDate(r.Date);
+    if (!metric_date) continue;
+    byDate.set(metric_date, {
+      site_id: siteId,
+      metric_date,
+      crawled_pages: intOrNull(r.CrawledPages),
+      in_index: intOrNull(r.InIndex),
+      in_links: intOrNull(r.InLinks),
+      crawl_errors: intOrNull(r.CrawlErrors),
+      dns_failures: intOrNull(r.DnsFailures),
+      blocked_by_robots_txt: intOrNull(r.BlockedByRobotsTxt),
+      code_2xx: intOrNull(r.Code2xx),
+      code_301: intOrNull(r.Code301),
+      code_302: intOrNull(r.Code302),
+      code_4xx: intOrNull(r.Code4xx),
+      code_5xx: intOrNull(r.Code5xx),
+      contains_malware: intOrNull(r.ContainsMalware),
+      connection_timeout: intOrNull(r.ConnectionTimeout),
+      all_other_codes: intOrNull(r.AllOtherCodes),
+      updated_at: updatedAt,
+    });
+  }
+  return [...byDate.values()].slice(0, maxRows);
 }

@@ -4,10 +4,12 @@ import {
   normalizeBingRows,
   normalizeBingQueryRows,
   normalizeBingPageRows,
+  normalizeBingCrawlStatsRows,
   findMatchingBingSite,
   hasEmbeddedBingError,
   type BingApiRow,
   type BingQueryStatsRow,
+  type BingCrawlStatsApiRow,
   type BingSiteRecord,
 } from "./bing-parse.ts";
 import type { SyncAdapter } from "./sync-run.ts";
@@ -161,9 +163,43 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
     if (error) throw error;
   }
 
+  let rowsFetched = rawRows.length + rawQueryRows.length + rawPageRows.length;
+  let rowsWritten = rows.length + queryRows.length + pageRows.length;
+  const failed: string[] = [];
+  const breakdownErrors: Record<string, { code: string; message: string }> = {};
+  function recordFailure(name: string, err: unknown) {
+    failed.push(name);
+    const message = err instanceof Error ? err.message : String(err);
+    const code = err instanceof SyncError ? err.code : "provider_error";
+    breakdownErrors[name] = { code, message };
+  }
+
+  // --- Best-effort: crawl/index health (GetCrawlStats) - genuinely available
+  // Bing discovery data (InIndex, CrawledPages, BlockedByRobotsTxt etc.),
+  // distinct from search performance. Feeds the Bing dashboard's
+  // indexed/discovered section instead of leaving it blank. A failure here
+  // never blocks the required traffic/query/page sync above.
+  try {
+    const apiRows = (await callBing("GetCrawlStats", apiKey, {
+      siteUrl: matched.Url,
+    })) as BingCrawlStatsApiRow[];
+    const crawlRows = normalizeBingCrawlStatsRows(apiRows, site.id, updatedAt);
+    if (crawlRows.length > 0) {
+      const { error } = await admin
+        .from("bing_crawl_stats_daily")
+        .upsert(crawlRows, { onConflict: "site_id,metric_date" });
+      if (error) throw error;
+    }
+    rowsFetched += apiRows.length;
+    rowsWritten += crawlRows.length;
+  } catch (err) {
+    recordFailure("crawl_stats", err);
+  }
+
   return {
-    rowsFetched: rawRows.length + rawQueryRows.length + rawPageRows.length,
-    rowsWritten: rows.length + queryRows.length + pageRows.length,
+    rowsFetched,
+    rowsWritten,
+    partial: failed.length > 0,
     metadata: {
       provider: "bing",
       bingVerifiedSiteUrl: matched.Url,
@@ -172,6 +208,8 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
       queryRowsFetched: rawQueryRows.length,
       pageRowsFetched: rawPageRows.length,
       note: "GetQueryStats/GetPageStats are weekly-updated Bing Webmaster datasets; aggregate traffic includes Web, Chat and other Bing verticals.",
+      failedBreakdowns: failed,
+      breakdownErrors,
     },
   };
 };

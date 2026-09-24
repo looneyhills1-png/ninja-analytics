@@ -59,6 +59,7 @@ function inspection(overrides: Partial<UrlInspection> = {}): UrlInspection {
     ninja_status: "indexed",
     site_lastmod: null,
     raw_response: null,
+    inspection_result_link: null,
     created_at: "2026-09-10T00:00:00Z",
     updated_at: "2026-09-10T00:00:00Z",
     ...overrides,

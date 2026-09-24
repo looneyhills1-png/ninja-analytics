@@ -249,6 +249,24 @@ describe("findInternalLinkOpportunities", () => {
     expect(wellLinked[0].targetLinkStatus).toBe("target-well-linked");
   });
 
+  it("never suggests a page whose only shared term is generic ticketing/commerce filler (2026-09-24 Sale Sharks / Oasis regression)", () => {
+    const primaryPages = [
+      page(
+        "https://ninjatickets.com/sale-sharks-tickets/",
+        "Sale Sharks Tickets",
+      ),
+    ];
+
+    const suggestions = findInternalLinkOpportunities({
+      targetUrl: "/oasis-uk-tour-2026-tickets/",
+      targetQuery: "when do oasis tickets go on sale",
+      primaryPages,
+      pagesWithSearchVisibility: new Set(),
+    });
+
+    expect(suggestions).toEqual([]);
+  });
+
   it("uses extraText (blurb/category/city from search-index.json) for relevance, not just title/URL", () => {
     const suggestions = findInternalLinkOpportunities({
       targetUrl: "/event/llandudno-chocolate-experience-llandudno/",

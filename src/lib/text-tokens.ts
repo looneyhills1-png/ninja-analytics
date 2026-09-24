@@ -47,6 +47,19 @@ const STOPWORDS = new Set([
   "index",
   "co",
   "uk",
+  // Generic ticketing/commerce filler that caused a real bad internal-link
+  // suggestion (2026-09-24): "when do oasis tickets go on sale" shares the
+  // token "sale" with the unrelated "Sale Sharks" rugby page (Sale is a
+  // place/team name, coincidentally also this common English word). None of
+  // these carry topical meaning on their own - filter them exactly like
+  // "book"/"buy"/"tickets" above, so a shared generic word never counts as
+  // genuine relevance.
+  "sale",
+  "sales",
+  "onsale",
+  "date",
+  "dates",
+  "release",
 ]);
 
 export function tokenize(text: string): string[] {

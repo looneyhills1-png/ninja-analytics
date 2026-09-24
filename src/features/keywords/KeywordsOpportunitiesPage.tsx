@@ -3,11 +3,14 @@ import { useOutletContext, useSearchParams } from "react-router-dom";
 import { Wand2 } from "lucide-react";
 import {
   useCommonCrawlPages,
+  useExecuteFix,
+  useFixRuns,
   useKeywordOpportunities,
   useSitePagesInventory,
   useSites,
 } from "@/lib/hooks";
 import { usePrivacyMode } from "@/lib/privacy";
+import { relativeTime } from "@/lib/dates";
 import type { KeywordsOutletContext } from "@/features/keywords/KeywordsLayout";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -83,6 +86,13 @@ export function KeywordsOpportunitiesPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fixPromptRow, setFixPromptRow] =
     useState<KeywordOpportunityRow | null>(null);
+  const executeFixMutation = useExecuteFix();
+  const [fixResultByQuery, setFixResultByQuery] = useState<
+    Record<
+      string,
+      { state: string; rejectedReasons: string[] } | { error: string }
+    >
+  >({});
 
   const category = params.get("category") as OpportunityCategory | null;
 
@@ -370,15 +380,117 @@ export function KeywordsOpportunitiesPage() {
                                 privacy.maskText(u, `kw-opp-link:${u}`)
                               }
                             />
-                            <div className="mt-3 flex justify-end">
-                              <button
-                                type="button"
-                                onClick={() => setFixPromptRow(row)}
-                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
-                              >
-                                <Wand2 className="h-3 w-3" />
-                                Generate Fix Prompt
-                              </button>
+                            <div className="mt-3 flex flex-col items-end gap-2">
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !row.rankingUrl ||
+                                    executeFixMutation.isPending
+                                  }
+                                  title={
+                                    row.rankingUrl
+                                      ? "Run the automated Fix workflow (inspect, validate, edit, commit - see the Fix Runs audit trail below)"
+                                      : "No ranking URL on record for this query - nothing to fix"
+                                  }
+                                  onClick={() => {
+                                    if (!row.rankingUrl) return;
+                                    executeFixMutation.mutate(
+                                      {
+                                        siteId,
+                                        query: row.query,
+                                        url: row.rankingUrl,
+                                        currentPosition: row.currentPosition,
+                                        impressions: row.impressions,
+                                        clicks: row.clicks,
+                                        ctr: row.ctr,
+                                        categories: row.categories,
+                                      },
+                                      {
+                                        onSuccess: (result) => {
+                                          setFixResultByQuery((prev) => ({
+                                            ...prev,
+                                            [row.query]: {
+                                              state: result.fixRun.state,
+                                              rejectedReasons: (
+                                                (result.fixRun
+                                                  .rejected_fixes as Array<{
+                                                  reason?: string;
+                                                }>) ?? []
+                                              ).map((r) => r.reason ?? ""),
+                                            },
+                                          }));
+                                        },
+                                        onError: (error) => {
+                                          setFixResultByQuery((prev) => ({
+                                            ...prev,
+                                            [row.query]: {
+                                              error:
+                                                error instanceof Error
+                                                  ? error.message
+                                                  : "Fix workflow failed.",
+                                            },
+                                          }));
+                                        },
+                                      },
+                                    );
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded border border-primary/50 bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Wand2 className="h-3 w-3" />
+                                  {executeFixMutation.isPending
+                                    ? "Running Fix..."
+                                    : "Run Fix"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setFixPromptRow(row)}
+                                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                                >
+                                  <Wand2 className="h-3 w-3" />
+                                  Generate Fix Prompt
+                                </button>
+                              </div>
+                              {fixResultByQuery[row.query] && (
+                                <div className="max-w-md text-right text-xs">
+                                  {"error" in fixResultByQuery[row.query] ? (
+                                    <p className="text-destructive">
+                                      {
+                                        (
+                                          fixResultByQuery[row.query] as {
+                                            error: string;
+                                          }
+                                        ).error
+                                      }
+                                    </p>
+                                  ) : (
+                                    <>
+                                      <p className="font-medium">
+                                        Fix run state:{" "}
+                                        {
+                                          (
+                                            fixResultByQuery[row.query] as {
+                                              state: string;
+                                            }
+                                          ).state
+                                        }
+                                      </p>
+                                      {(
+                                        fixResultByQuery[row.query] as {
+                                          rejectedReasons: string[];
+                                        }
+                                      ).rejectedReasons.map((reason, i) => (
+                                        <p
+                                          key={i}
+                                          className="text-muted-foreground"
+                                        >
+                                          {reason}
+                                        </p>
+                                      ))}
+                                    </>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -406,7 +518,118 @@ export function KeywordsOpportunitiesPage() {
           onClose={() => setFixPromptRow(null)}
         />
       )}
+
+      <FixRunsPanel siteId={siteId} />
     </div>
+  );
+}
+
+const FIX_RUN_STATE_LABEL: Record<string, string> = {
+  diagnosis_ready: "Diagnosis ready",
+  validating: "Validating recommendations",
+  rejected: "Rejected",
+  editing: "Editing",
+  testing: "Testing",
+  deploying: "Deploying",
+  verifying_production: "Verifying production",
+  sitemap_submitted: "Sitemap submitted",
+  awaiting_recrawl: "Awaiting Google recrawl",
+  recrawled: "Recrawled",
+  indexed: "Indexed",
+  failed: "Failed",
+};
+
+const FIX_RUN_STATE_TONE: Record<string, string> = {
+  rejected: "border-warning/30 bg-warning/10 text-warning",
+  failed: "border-destructive/30 bg-destructive/10 text-destructive",
+  indexed: "border-success/30 bg-success/10 text-success",
+  recrawled: "border-success/30 bg-success/10 text-success",
+};
+
+/** Audit trail for every "Run Fix" click on this site (PART 1, 2026-09-24
+ * brief §8) - query, URL, state, rejected reasons, commit, deploy result.
+ * Polls gently (see useFixRuns) since state also advances server-side on its
+ * own schedule (advance-fix-runs). */
+function FixRunsPanel({ siteId }: { siteId: string }) {
+  const { data: runs, isLoading } = useFixRuns(siteId);
+  if (isLoading) return <Skeleton className="h-32" />;
+  if (!runs || runs.length === 0) return null;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold">Fix runs</h2>
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Query</th>
+                <th className="px-2 py-2 font-medium">State</th>
+                <th className="px-2 py-2 font-medium">Commit</th>
+                <th className="px-2 py-2 font-medium">Detail</th>
+                <th className="px-2 py-2 font-medium">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run) => {
+                const rejected =
+                  (run.rejected_fixes as Array<{ reason?: string }> | null) ??
+                  [];
+                return (
+                  <tr
+                    key={run.id}
+                    className="border-b border-border last:border-0 align-top"
+                  >
+                    <td
+                      className="max-w-[16rem] truncate px-3 py-2"
+                      title={run.query}
+                    >
+                      {run.query}
+                    </td>
+                    <td className="px-2 py-2">
+                      <span
+                        className={cn(
+                          "inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium",
+                          FIX_RUN_STATE_TONE[run.state] ??
+                            "border-border bg-muted/40 text-muted-foreground",
+                        )}
+                      >
+                        {FIX_RUN_STATE_LABEL[run.state] ?? run.state}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-xs">
+                      {run.commit_url ? (
+                        <a
+                          href={run.commit_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {run.commit_sha?.slice(0, 7)}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="max-w-[20rem] px-2 py-2 text-xs text-muted-foreground">
+                      {run.error_message ??
+                        rejected
+                          .map((r) => r.reason)
+                          .filter(Boolean)
+                          .join(" ") ??
+                        "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">
+                      {relativeTime(run.created_at)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </section>
   );
 }
 

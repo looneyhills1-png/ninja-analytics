@@ -23,6 +23,7 @@ import type {
   CommonCrawlPage,
   CommonCrawlRun,
   CompetitorDomain,
+  FixRun,
   GscCoverageSnapshot,
   IntegrationStatus,
   ObservedSerpResult,
@@ -213,6 +214,125 @@ export async function getSiteSearchTerms(
       queries: getDateCoverage(queryRows),
       pages: getDateCoverage(pageRows),
     },
+  };
+}
+
+export interface BingCrawlHealthPoint {
+  metric_date: string;
+  crawled_pages: number | null;
+  in_index: number | null;
+  in_links: number | null;
+  crawl_errors: number | null;
+  blocked_by_robots_txt: number | null;
+}
+
+export interface SiteBingVisibility {
+  queries: TermRow[];
+  pages: TermRow[];
+  coverage: {
+    queries: DateCoverage;
+    pages: DateCoverage;
+  };
+  /** Whether Bing has EVER returned any query/page rows for this site (not
+   * just within the current window) - lets the UI say "Bing hasn't reported
+   * query/page data for this site yet" rather than implying the pipeline is
+   * broken when a low-traffic site genuinely has none in the window. */
+  queryDataEverAvailable: boolean;
+  pageDataEverAvailable: boolean;
+  crawlHealth: BingCrawlHealthPoint[];
+  latestCrawlHealth: BingCrawlHealthPoint | null;
+}
+
+/** Bing-specific visibility: query/page breakdown (search_query_daily /
+ * search_page_daily, engine='bing', now populated by GetQueryStats /
+ * GetPageStats - see _shared/bing.ts) plus crawl/index health
+ * (bing_crawl_stats_daily, from GetCrawlStats). Missing data is always
+ * reported as missing (empty arrays / null), never defaulted to zero -
+ * CLAUDE.md: "Missing data must remain missing/unknown." */
+export async function getSiteBingVisibility(
+  siteId: string,
+  days: number,
+): Promise<SiteBingVisibility> {
+  const since = format(subDays(new Date(), days * 2), "yyyy-MM-dd");
+  type QueryRow = {
+    metric_date: string;
+    query: string;
+    clicks: number;
+    impressions: number;
+    average_position: number | null;
+  };
+  type PageRow = {
+    metric_date: string;
+    page: string;
+    clicks: number;
+    impressions: number;
+    average_position: number | null;
+  };
+
+  const [queryRows, pageRows, everQuery, everPage, crawlRows] =
+    await Promise.all([
+      fetchAllPages<QueryRow>(() =>
+        supabase
+          .from("search_query_daily")
+          .select("metric_date, query, clicks, impressions, average_position")
+          .eq("site_id", siteId)
+          .eq("engine", "bing")
+          .gte("metric_date", since)
+          .order("metric_date"),
+      ),
+      fetchAllPages<PageRow>(() =>
+        supabase
+          .from("search_page_daily")
+          .select("metric_date, page, clicks, impressions, average_position")
+          .eq("site_id", siteId)
+          .eq("engine", "bing")
+          .gte("metric_date", since)
+          .order("metric_date"),
+      ),
+      supabase
+        .from("search_query_daily")
+        .select("query", { count: "exact", head: true })
+        .eq("site_id", siteId)
+        .eq("engine", "bing"),
+      supabase
+        .from("search_page_daily")
+        .select("page", { count: "exact", head: true })
+        .eq("site_id", siteId)
+        .eq("engine", "bing"),
+      supabase
+        .from("bing_crawl_stats_daily")
+        .select(
+          "metric_date, crawled_pages, in_index, in_links, crawl_errors, blocked_by_robots_txt",
+        )
+        .eq("site_id", siteId)
+        .gte("metric_date", since)
+        .order("metric_date"),
+    ]);
+
+  if (everQuery.error) throw everQuery.error;
+  if (everPage.error) throw everPage.error;
+  if (crawlRows.error) throw crawlRows.error;
+
+  const crawlHealth = (crawlRows.data ?? []) as BingCrawlHealthPoint[];
+
+  return {
+    queries: aggregateBreakdown(
+      queryRows.map((r) => ({ ...r, key: r.query })),
+      days,
+    ),
+    pages: aggregateBreakdown(
+      pageRows.map((r) => ({ ...r, key: r.page })),
+      days,
+    ),
+    coverage: {
+      queries: getDateCoverage(queryRows),
+      pages: getDateCoverage(pageRows),
+    },
+    queryDataEverAvailable: (everQuery.count ?? 0) > 0,
+    pageDataEverAvailable: (everPage.count ?? 0) > 0,
+    crawlHealth,
+    latestCrawlHealth:
+      crawlHealth.length > 0 ? crawlHealth[crawlHealth.length - 1] : null,
   };
 }
 
@@ -1488,4 +1608,49 @@ export async function triggerUrlInspection(
     },
     "Could not inspect these URLs.",
   );
+}
+
+// SEO Fix Workflow (Ranking Growth Roadmap, 2026-09-24) --------------------
+export interface ExecuteFixInput {
+  siteId: string;
+  query: string;
+  url: string;
+  currentPosition: number | null;
+  impressions: number;
+  clicks: number;
+  ctr: number | null;
+  categories: string[];
+}
+
+export interface ExecuteFixResult {
+  ok: boolean;
+  fixRun: FixRun;
+}
+
+/** Real automated Fix execution (inspect -> validate -> edit -> commit),
+ * see supabase/functions/execute-fix. Everything from "deploying" onward is
+ * advanced by the scheduled advance-fix-runs function - this call returns as
+ * soon as the commit (or rejection) is recorded, never blocking on CI. */
+export async function executeFix(
+  input: ExecuteFixInput,
+): Promise<ExecuteFixResult> {
+  return invokeFunction<ExecuteFixResult>(
+    "execute-fix",
+    { ...input },
+    "Could not run the Fix workflow for this opportunity.",
+  );
+}
+
+export async function getFixRuns(
+  siteId: string,
+  limit = 20,
+): Promise<FixRun[]> {
+  const { data, error } = await supabase
+    .from("fix_runs")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
 }

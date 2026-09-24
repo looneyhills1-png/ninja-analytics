@@ -41,6 +41,19 @@ export type NinjaIndexStatus =
   | "canonical_mismatch"
   | "blocked"
   | "unknown";
+export type FixRunState =
+  | "diagnosis_ready"
+  | "validating"
+  | "rejected"
+  | "editing"
+  | "testing"
+  | "deploying"
+  | "verifying_production"
+  | "sitemap_submitted"
+  | "awaiting_recrawl"
+  | "recrawled"
+  | "indexed"
+  | "failed";
 
 export interface Database {
   public: {
@@ -201,6 +214,57 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "search_page_daily_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      bing_crawl_stats_daily: {
+        Row: {
+          site_id: string;
+          metric_date: string;
+          crawled_pages: number | null;
+          in_index: number | null;
+          in_links: number | null;
+          crawl_errors: number | null;
+          dns_failures: number | null;
+          blocked_by_robots_txt: number | null;
+          code_2xx: number | null;
+          code_301: number | null;
+          code_302: number | null;
+          code_4xx: number | null;
+          code_5xx: number | null;
+          contains_malware: number | null;
+          connection_timeout: number | null;
+          all_other_codes: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          site_id: string;
+          metric_date: string;
+          crawled_pages?: number | null;
+          in_index?: number | null;
+          in_links?: number | null;
+          crawl_errors?: number | null;
+          dns_failures?: number | null;
+          blocked_by_robots_txt?: number | null;
+          code_2xx?: number | null;
+          code_301?: number | null;
+          code_302?: number | null;
+          code_4xx?: number | null;
+          code_5xx?: number | null;
+          contains_malware?: number | null;
+          connection_timeout?: number | null;
+          all_other_codes?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["bing_crawl_stats_daily"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "bing_crawl_stats_daily_site_id_fkey";
             columns: ["site_id"];
             referencedRelation: "sites";
             referencedColumns: ["id"];
@@ -966,6 +1030,7 @@ export interface Database {
           ninja_status: NinjaIndexStatus;
           site_lastmod: string | null;
           raw_response: Json | null;
+          inspection_result_link: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -987,6 +1052,7 @@ export interface Database {
           ninja_status: NinjaIndexStatus;
           site_lastmod?: string | null;
           raw_response?: Json | null;
+          inspection_result_link?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1021,6 +1087,7 @@ export interface Database {
           sitemaps: string[];
           ninja_status: NinjaIndexStatus;
           site_lastmod: string | null;
+          inspection_result_link: string | null;
         };
         Insert: {
           id?: string;
@@ -1040,6 +1107,7 @@ export interface Database {
           sitemaps?: string[];
           ninja_status: NinjaIndexStatus;
           site_lastmod?: string | null;
+          inspection_result_link?: string | null;
         };
         Update: Partial<
           Database["public"]["Tables"]["url_inspection_history"]["Insert"]
@@ -1049,6 +1117,114 @@ export interface Database {
             foreignKeyName: "url_inspection_history_site_id_fkey";
             columns: ["site_id"];
             referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      fix_runs: {
+        Row: {
+          id: string;
+          site_id: string;
+          query: string;
+          url: string;
+          state: FixRunState;
+          evidence: Json;
+          proposed_fixes: Json;
+          rejected_fixes: Json;
+          files_changed: Json | null;
+          commit_sha: string | null;
+          commit_url: string | null;
+          github_run_id: number | null;
+          github_run_url: string | null;
+          deployment_result: Json | null;
+          live_verification: Json | null;
+          sitemap_submission_result: Json | null;
+          google_inspection_before: Json | null;
+          google_inspection_after: Json | null;
+          crawl_time_before: string | null;
+          crawl_time_after: string | null;
+          deployed_at: string | null;
+          error_message: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          query: string;
+          url: string;
+          state?: FixRunState;
+          evidence?: Json;
+          proposed_fixes?: Json;
+          rejected_fixes?: Json;
+          files_changed?: Json | null;
+          commit_sha?: string | null;
+          commit_url?: string | null;
+          github_run_id?: number | null;
+          github_run_url?: string | null;
+          deployment_result?: Json | null;
+          live_verification?: Json | null;
+          sitemap_submission_result?: Json | null;
+          google_inspection_before?: Json | null;
+          google_inspection_after?: Json | null;
+          crawl_time_before?: string | null;
+          crawl_time_after?: string | null;
+          deployed_at?: string | null;
+          error_message?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["fix_runs"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "fix_runs_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sitemap_submissions: {
+        Row: {
+          id: string;
+          site_id: string;
+          fix_run_id: string | null;
+          sitemap_url: string;
+          submitted_at: string;
+          submit_ok: boolean;
+          submit_status: number | null;
+          submit_error: string | null;
+          last_checked_at: string | null;
+          last_checked_result: Json | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          fix_run_id?: string | null;
+          sitemap_url: string;
+          submitted_at?: string;
+          submit_ok: boolean;
+          submit_status?: number | null;
+          submit_error?: string | null;
+          last_checked_at?: string | null;
+          last_checked_result?: Json | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["sitemap_submissions"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "sitemap_submissions_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sitemap_submissions_fix_run_id_fkey";
+            columns: ["fix_run_id"];
+            referencedRelation: "fix_runs";
             referencedColumns: ["id"];
           },
         ];
@@ -1090,6 +1266,9 @@ export type SearchDaily = Tables<"search_daily">;
 export type SearchQueryDaily = Tables<"search_query_daily">;
 export type SearchPageDaily = Tables<"search_page_daily">;
 export type SearchQueryPageDaily = Tables<"search_query_page_daily">;
+export type BingCrawlStatsDaily = Tables<"bing_crawl_stats_daily">;
+export type FixRun = Tables<"fix_runs">;
+export type SitemapSubmission = Tables<"sitemap_submissions">;
 export type RankSnapshot = Tables<"rank_snapshots">;
 export type CompetitorDomain = Tables<"competitor_domains">;
 export type ObservedSerpResult = Tables<"observed_serp_results">;

@@ -49,6 +49,9 @@ import {
   getSyncRuns,
   getInsights,
   getSiteSearchTerms,
+  getSiteBingVisibility,
+  executeFix,
+  getFixRuns,
   getDbUsage,
   runCleanup,
   invokeManualSync,
@@ -57,6 +60,7 @@ import {
   type AiObservationInput,
   type AiPromptFormValues,
   type CompetitorDomainFormValues,
+  type ExecuteFixInput,
   type ManualSource,
   type RankObservationInput,
   type SerpObservationResultInput,
@@ -76,6 +80,9 @@ export const queryKeys = {
     ["site-metrics", siteId, days] as const,
   siteSearchTerms: (siteId: string, days: number) =>
     ["site-search-terms", siteId, days] as const,
+  siteBingVisibility: (siteId: string, days: number) =>
+    ["site-bing-visibility", siteId, days] as const,
+  fixRuns: (siteId: string) => ["fix-runs", siteId] as const,
   integrationStatuses: (siteId?: string) =>
     ["integration-statuses", siteId ?? null] as const,
   syncRuns: (filters: SyncRunFilters) => ["sync-runs", filters] as const,
@@ -155,6 +162,38 @@ export function useSiteSearchTerms(siteId: string, days: number) {
     queryKey: queryKeys.siteSearchTerms(siteId, days),
     queryFn: () => getSiteSearchTerms(siteId, days),
     enabled: !!siteId,
+  });
+}
+
+export function useSiteBingVisibility(siteId: string, days: number) {
+  return useQuery({
+    queryKey: queryKeys.siteBingVisibility(siteId, days),
+    queryFn: () => getSiteBingVisibility(siteId, days),
+    enabled: !!siteId,
+  });
+}
+
+export function useExecuteFix() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ExecuteFixInput) => executeFix(input),
+    onSuccess: (result) => {
+      qc.invalidateQueries({
+        queryKey: queryKeys.fixRuns(result.fixRun.site_id),
+      });
+    },
+  });
+}
+
+export function useFixRuns(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.fixRuns(siteId),
+    queryFn: () => getFixRuns(siteId),
+    enabled: !!siteId,
+    // Fix runs advance server-side (advance-fix-runs, every 15 min) - poll
+    // gently while this page is open rather than requiring a manual reload,
+    // but never faster than the scheduler itself actually moves state.
+    refetchInterval: 60_000,
   });
 }
 

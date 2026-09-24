@@ -3,6 +3,7 @@ import {
   normalizeBingRows,
   normalizeBingQueryRows,
   normalizeBingPageRows,
+  normalizeBingCrawlStatsRows,
   parseMicrosoftDate,
   findMatchingBingSite,
   hasEmbeddedBingError,
@@ -104,6 +105,168 @@ const LIVE_GET_USER_SITES_BODY = {
   ],
 };
 const LIVE_EMPTY_STATS_BODY = { d: [] };
+
+// Fixtures captured verbatim from a live diagnose-bing run against the real
+// ninjatickets.com Bing Webmaster account (2026-09-24, PART 2 of the SEO Fix
+// Workflow + Bing Visibility brief - run id 36018096930). This is the run
+// that proved GetQueryStats/GetPageStats/GetCrawlStats genuinely return
+// non-empty data for this site, which is why they were never called by the
+// sync adapter before this - a missing implementation, not an API or data
+// limitation.
+const LIVE_GET_QUERY_STATS_D = [
+  {
+    Date: "/Date(1789689600000)/",
+    Query: "what is the venue and scale for reading festival",
+    Clicks: 0,
+    Impressions: 2,
+    AvgClickPosition: -1,
+    AvgImpressionPosition: 6,
+  },
+  {
+    Date: "/Date(1789689600000)/",
+    Query: "blackpool 80s weekender 2026",
+    Clicks: 0,
+    Impressions: 1,
+    AvgClickPosition: -1,
+    AvgImpressionPosition: 9,
+  },
+];
+const LIVE_GET_PAGE_STATS_D = [
+  {
+    Date: "/Date(1789689600000)/",
+    Query:
+      "https://ninjatickets.com/guides/reading-festival-2026-tickets-guide/",
+    Clicks: 0,
+    Impressions: 6,
+    AvgClickPosition: -1,
+    AvgImpressionPosition: 6,
+  },
+  {
+    Date: "/Date(1789689600000)/",
+    Query: "https://ninjatickets.com/event/blackpool-80s-weekender-2026/",
+    Clicks: 0,
+    Impressions: 4,
+    AvgClickPosition: -1,
+    AvgImpressionPosition: 9,
+  },
+];
+const LIVE_GET_CRAWL_STATS_D = [
+  {
+    Date: "/Date(1789516800000)/",
+    Code2xx: 59,
+    Code301: 9,
+    Code302: 0,
+    Code4xx: 0,
+    Code5xx: 0,
+    InIndex: 56,
+    InLinks: 45,
+    CrawlErrors: 1,
+    DnsFailures: 0,
+    CrawledPages: 11,
+    AllOtherCodes: 35,
+    ContainsMalware: 0,
+    ConnectionTimeout: 0,
+    BlockedByRobotsTxt: 1,
+  },
+];
+
+describe("normalizeBingQueryRows (live GetQueryStats fixture)", () => {
+  it("maps real query rows, computing ctr locally and nulling the -1 no-click sentinel", () => {
+    const rows = normalizeBingQueryRows(LIVE_GET_QUERY_STATS_D, SITE, UPDATED);
+    expect(rows).toHaveLength(2);
+    const reading = rows.find((r) => r.query.startsWith("what is the venue"))!;
+    expect(reading).toEqual({
+      site_id: SITE,
+      engine: "bing",
+      metric_date: "2026-09-18",
+      query: "what is the venue and scale for reading festival",
+      clicks: 0,
+      impressions: 2,
+      ctr: 0,
+      average_position: 6,
+      updated_at: UPDATED,
+    });
+  });
+
+  it("drops rows with no query text or unparseable date", () => {
+    expect(
+      normalizeBingQueryRows(
+        [{ Date: "/Date(1789689600000)/", Impressions: 1 }],
+        SITE,
+        UPDATED,
+      ),
+    ).toHaveLength(0);
+    expect(
+      normalizeBingQueryRows(
+        [{ Date: "bad", Query: "x", Impressions: 1 }],
+        SITE,
+        UPDATED,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("nulls ctr when impressions is zero rather than dividing by zero", () => {
+    const rows = normalizeBingQueryRows(
+      [
+        {
+          Date: "/Date(1789689600000)/",
+          Query: "x",
+          Clicks: 0,
+          Impressions: 0,
+        },
+      ],
+      SITE,
+      UPDATED,
+    );
+    expect(rows[0].ctr).toBeNull();
+  });
+});
+
+describe("normalizeBingPageRows (live GetPageStats fixture)", () => {
+  it("maps the page URL out of Bing's `Query` field (a real API quirk, not a bug)", () => {
+    const rows = normalizeBingPageRows(LIVE_GET_PAGE_STATS_D, SITE, UPDATED);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.page)).toContain(
+      "https://ninjatickets.com/event/blackpool-80s-weekender-2026/",
+    );
+    expect(rows[0].average_position).not.toBeNull();
+  });
+});
+
+describe("normalizeBingCrawlStatsRows (live GetCrawlStats fixture)", () => {
+  it("maps real crawl/index health counters, confirming Bing has this site's pages indexed", () => {
+    const rows = normalizeBingCrawlStatsRows(
+      LIVE_GET_CRAWL_STATS_D,
+      SITE,
+      UPDATED,
+    );
+    expect(rows).toEqual([
+      {
+        site_id: SITE,
+        metric_date: "2026-09-16",
+        crawled_pages: 11,
+        in_index: 56,
+        in_links: 45,
+        crawl_errors: 1,
+        dns_failures: 0,
+        blocked_by_robots_txt: 1,
+        code_2xx: 59,
+        code_301: 9,
+        code_302: 0,
+        code_4xx: 0,
+        code_5xx: 0,
+        contains_malware: 0,
+        connection_timeout: 0,
+        all_other_codes: 35,
+        updated_at: UPDATED,
+      },
+    ]);
+  });
+
+  it("handles an undefined array", () => {
+    expect(normalizeBingCrawlStatsRows(undefined, SITE, UPDATED)).toEqual([]);
+  });
+});
 
 describe("normalizeSiteUrl", () => {
   it("normalizes protocol, www and trailing slash the same way", () => {

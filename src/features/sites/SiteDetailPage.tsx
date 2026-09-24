@@ -31,6 +31,7 @@ import { SyncRunsTable } from "@/features/sync-runs/SyncRunsTable";
 import { ManualSyncButtons } from "@/features/sites/ManualSyncButtons";
 import { SiteFormDialog } from "@/features/sites/SiteFormDialog";
 import { SearchTermsSection } from "@/features/sites/SearchTermsSection";
+import { BingVisibilitySection } from "@/features/sites/BingVisibilitySection";
 import { SiteReportExportButton } from "@/features/sites/SiteReportExportButton";
 import { TrajectorySection } from "@/features/sites/TrajectorySection";
 import { TrackedQueriesSection } from "@/features/sites/TrackedQueriesSection";
@@ -211,6 +212,15 @@ export function SiteDetailPage() {
 
       {/* Top queries & pages */}
       <SearchTermsSection siteId={siteId} days={days} />
+
+      {/* Bing visibility & discovery (PART 2, 2026-09-24 brief) */}
+      {site.bing_site_url && (
+        <BingVisibilitySection
+          siteId={siteId}
+          domain={site.domain}
+          days={days}
+        />
+      )}
 
       {/* Recent runs */}
       <section className="space-y-3">
