@@ -91,10 +91,10 @@ function inspectionResultLink(insp: UrlInspection | null): string | null {
   ) {
     return null;
   }
-  const link = (
-    inspectionResult as Record<string, unknown>
-  ).inspectionResultLink;
-  return typeof link === "string" && link.startsWith("https://search.google.com/")
+  const link = (inspectionResult as Record<string, unknown>)
+    .inspectionResultLink;
+  return typeof link === "string" &&
+    link.startsWith("https://search.google.com/")
     ? link
     : null;
 }
