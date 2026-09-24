@@ -2,9 +2,12 @@ import { SyncError, codeForStatus, isRetryableStatus } from "./errors.ts";
 import { fetchWithRetry } from "./http.ts";
 import {
   normalizeBingRows,
+  normalizeBingQueryRows,
+  normalizeBingPageRows,
   findMatchingBingSite,
   hasEmbeddedBingError,
   type BingApiRow,
+  type BingQueryStatsRow,
   type BingSiteRecord,
 } from "./bing-parse.ts";
 import type { SyncAdapter } from "./sync-run.ts";
@@ -122,10 +125,16 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
     );
   }
 
-  const rawRows = (await callBing("GetRankAndTrafficStats", apiKey, {
-    siteUrl: matched.Url,
-  })) as BingApiRow[];
-  const rows = normalizeBingRows(rawRows, site.id, new Date().toISOString());
+  const updatedAt = new Date().toISOString();
+  const [rawRows, rawQueryRows, rawPageRows] = await Promise.all([
+    callBing("GetRankAndTrafficStats", apiKey, { siteUrl: matched.Url }) as Promise<BingApiRow[]>,
+    callBing("GetQueryStats", apiKey, { siteUrl: matched.Url }) as Promise<BingQueryStatsRow[]>,
+    callBing("GetPageStats", apiKey, { siteUrl: matched.Url }) as Promise<BingQueryStatsRow[]>,
+  ]);
+
+  const rows = normalizeBingRows(rawRows, site.id, updatedAt);
+  const queryRows = normalizeBingQueryRows(rawQueryRows, site.id, updatedAt);
+  const pageRows = normalizeBingPageRows(rawPageRows, site.id, updatedAt);
 
   if (rows.length > 0) {
     const { error } = await admin
@@ -133,14 +142,31 @@ export const bingAdapter: SyncAdapter = async ({ admin, site }) => {
       .upsert(rows, { onConflict: "site_id,engine,metric_date" });
     if (error) throw error;
   }
+  if (queryRows.length > 0) {
+    const { error } = await admin
+      .from("search_query_daily")
+      .upsert(queryRows, { onConflict: "site_id,engine,metric_date,query" });
+    if (error) throw error;
+  }
+  if (pageRows.length > 0) {
+    const { error } = await admin
+      .from("search_page_daily")
+      .upsert(pageRows, { onConflict: "site_id,engine,metric_date,page" });
+    if (error) throw error;
+  }
 
   return {
-    rowsFetched: rawRows.length,
-    rowsWritten: rows.length,
+    rowsFetched: rawRows.length + rawQueryRows.length + rawPageRows.length,
+    rowsWritten: rows.length + queryRows.length + pageRows.length,
     metadata: {
       provider: "bing",
       bingVerifiedSiteUrl: matched.Url,
       bingSiteIsVerified: matched.IsVerified ?? null,
+      aggregateRowsFetched: rawRows.length,
+      queryRowsFetched: rawQueryRows.length,
+      pageRowsFetched: rawPageRows.length,
+      note:
+        "GetQueryStats/GetPageStats are weekly-updated Bing Webmaster datasets; aggregate traffic includes Web, Chat and other Bing verticals.",
     },
   };
 };
