@@ -8,7 +8,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import {
-  useGscCoverageSnapshots,\n  useKeywordOpportunities,
+  useGscCoverageSnapshots,
+  useKeywordOpportunities,
   useLatestSiteAuditPages,
   useSiteLastmods,
   useSites,
@@ -249,7 +250,8 @@ export function IndexingPage() {
     setSelected(new Set());
   }
 
-  const coverageQuery = useGscCoverageSnapshots(siteId);\n  const opportunitiesQuery = useKeywordOpportunities(siteId, DAYS);
+  const coverageQuery = useGscCoverageSnapshots(siteId);
+  const opportunitiesQuery = useKeywordOpportunities(siteId, DAYS);
   const inspectionsQuery = useUrlInspections(siteId);
   const lastmodsQuery = useSiteLastmods(site?.domain ?? "");
   const auditQuery = useLatestSiteAuditPages(siteId);
@@ -390,7 +392,9 @@ export function IndexingPage() {
         </select>
       </div>
 
-      {coverageQuery.isLoading || opportunitiesQuery.isLoading || inspectionsQuery.isLoading ? (
+      {coverageQuery.isLoading ||
+      opportunitiesQuery.isLoading ||
+      inspectionsQuery.isLoading ? (
         <Skeleton className="h-40" />
       ) : (
         <>
@@ -401,7 +405,9 @@ export function IndexingPage() {
                   Google indexed coverage
                 </p>
                 <p className="mt-1 text-3xl font-bold tabular-nums text-success">
-                  {latestCoverage ? formatNumber(latestCoverage.affected_pages) : "-"}
+                  {latestCoverage
+                    ? formatNumber(latestCoverage.affected_pages)
+                    : "-"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Search Console Coverage export
@@ -418,7 +424,8 @@ export function IndexingPage() {
                   {formatNumber(inspectedTotal)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  URL Inspection API checks · {summary.indexed} indexed · {summary.blocked} blocked
+                  URL Inspection API checks · {summary.indexed} indexed ·{" "}
+                  {summary.blocked} blocked
                 </p>
               </div>
             </Card>

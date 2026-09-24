@@ -21,7 +21,8 @@ import type {
   CommonCrawlPage,
   CommonCrawlRun,
   CompetitorDomain,
-  GscCoverageSnapshot,\n  IntegrationStatus,
+  GscCoverageSnapshot,
+  IntegrationStatus,
   ObservedSerpResult,
   RankDevice,
   RankSnapshot,
@@ -1370,6 +1371,21 @@ export async function recordAiVisibilityObservation(
 // ---------------------------------------------------------------------------
 // Indexing / URL Inspection (Ranking Growth Roadmap Phase 4)
 // ---------------------------------------------------------------------------
+
+/** Imported Search Console coverage totals, ordered chronologically so the
+ * dashboard can reliably select the latest snapshot. */
+export async function getGscCoverageSnapshots(
+  siteId: string,
+): Promise<GscCoverageSnapshot[]> {
+  return fetchAllPages<GscCoverageSnapshot>(() =>
+    supabase
+      .from("gsc_coverage_snapshots")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("metric_date")
+      .order("imported_at"),
+  );
+}
 
 /** The current cached state for every URL this site has ever had inspected -
  * cheap to read for the Indexing dashboard (see supabase/functions/

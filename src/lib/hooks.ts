@@ -16,7 +16,8 @@ import {
   getCommonCrawlRuns,
   getCompetitorDomains,
   getEngineQueryPositions,
-  getGscCoverageSnapshots,\n  getIntegrationStatuses,
+  getGscCoverageSnapshots,
+  getIntegrationStatuses,
   getKeywordOpportunities,
   getObservedSerpResults,
   getPortfolioPageDaily,
@@ -109,7 +110,9 @@ export const queryKeys = {
     ["ai-visibility-prompts", siteId] as const,
   aiVisibilityObservations: (siteId: string) =>
     ["ai-visibility-observations", siteId] as const,
-  gscCoverageSnapshots: (siteId: string) => ["gsc-coverage-snapshots", siteId] as const,\n  urlInspections: (siteId: string) => ["url-inspections", siteId] as const,
+  gscCoverageSnapshots: (siteId: string) =>
+    ["gsc-coverage-snapshots", siteId] as const,
+  urlInspections: (siteId: string) => ["url-inspections", siteId] as const,
   urlInspectionHistory: (siteId: string, url: string) =>
     ["url-inspection-history", siteId, url] as const,
 };
@@ -579,6 +582,14 @@ export function useRecordAiVisibilityObservation(siteId: string) {
 }
 
 // Indexing / URL Inspection (Ranking Growth Roadmap Phase 4) ----------------
+
+export function useGscCoverageSnapshots(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.gscCoverageSnapshots(siteId),
+    queryFn: () => getGscCoverageSnapshots(siteId),
+    enabled: !!siteId,
+  });
+}
 
 export function useUrlInspections(siteId: string) {
   return useQuery({
