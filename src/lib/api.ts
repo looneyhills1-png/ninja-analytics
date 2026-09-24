@@ -21,7 +21,7 @@ import type {
   CommonCrawlPage,
   CommonCrawlRun,
   CompetitorDomain,
-  IntegrationStatus,
+  GscCoverageSnapshot,\n  IntegrationStatus,
   ObservedSerpResult,
   RankDevice,
   RankSnapshot,
