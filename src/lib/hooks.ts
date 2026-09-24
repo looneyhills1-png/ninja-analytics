@@ -9,7 +9,7 @@ import {
   addCompetitorDomain,
   addTrackedQuery,
   addTrackedRankKeyword,
-  getAiBriefing,
+  getAiBriefing,\n  getLatestBingAiPerformance,
   getAiVisibilityObservations,
   getAiVisibilityPrompts,
   getCommonCrawlPages,
@@ -557,6 +557,14 @@ export function useRemoveAiVisibilityPrompt(siteId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.aiVisibilityPrompts(siteId) });
     },
+  });
+}
+
+export function useLatestBingAiPerformance(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.bingAiPerformance(siteId),
+    queryFn: () => getLatestBingAiPerformance(siteId),
+    enabled: !!siteId,
   });
 }
 
