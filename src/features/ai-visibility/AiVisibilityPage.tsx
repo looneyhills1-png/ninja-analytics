@@ -5,6 +5,7 @@ import {
   useAddAiVisibilityPrompt,
   useAiVisibilityObservations,
   useAiVisibilityPrompts,
+  useLatestBingAiPerformance,
   useRecordAiVisibilityObservation,
   useRemoveAiVisibilityPrompt,
   useSearchAppearanceDaily,
@@ -58,6 +59,7 @@ export function AiVisibilityPage() {
   const promptsQuery = useAiVisibilityPrompts(siteId);
   const observationsQuery = useAiVisibilityObservations(siteId);
   const appearanceQuery = useSearchAppearanceDaily(siteId, 28);
+  const bingAiQuery = useLatestBingAiPerformance(siteId);
   const searchTermsQuery = useSiteSearchTerms(siteId, 28);
 
   const prompts = useMemo(
@@ -125,9 +127,10 @@ export function AiVisibilityPage() {
           <h1 className="text-xl font-semibold">AI Visibility</h1>
           <p className="text-sm text-muted-foreground">
             Coverage across ChatGPT, Gemini, Copilot, Claude, Siri, Alexa,
-            Yahoo, DuckDuckGo, Brave, Ecosia, Dogpile, Perplexity and more -
-            mostly via manual/on-demand tests, since none of them expose a free
-            per-site query or citation API.
+            Yahoo, DuckDuckGo, Brave, Ecosia, Dogpile, Perplexity and more.
+            Bing Webmaster Tools now exposes first-party AI citation data in
+            its portal; Microsoft has not published an official API for that
+            AI Performance dataset yet, so imported snapshots are labelled.
           </p>
         </div>
         <select
@@ -166,6 +169,8 @@ export function AiVisibilityPage() {
           coverage={coverage}
           aiAppearanceRows={aiAppearanceRows}
           appearanceLoading={appearanceQuery.isLoading}
+          bingAi={bingAiQuery.data ?? { snapshot: null, pages: [] }}
+          bingAiLoading={bingAiQuery.isLoading}
         />
       )}
       {tab === "prompts" && (
@@ -195,6 +200,8 @@ function CoverageTab({
   coverage,
   aiAppearanceRows,
   appearanceLoading,
+  bingAi,
+  bingAiLoading,
 }: {
   coverage: ReturnType<typeof computeSourceCoverage>;
   aiAppearanceRows: {
@@ -206,6 +213,18 @@ function CoverageTab({
     average_position: number | null;
   }[];
   appearanceLoading: boolean;
+  bingAi: {
+    snapshot: {
+      captured_at: string;
+      range_label: string;
+      total_citations: number;
+      average_cited_pages: number | null;
+      source: string;
+      notes: string | null;
+    } | null;
+    pages: { page_url: string; citations: number }[];
+  };
+  bingAiLoading: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -287,6 +306,70 @@ function CoverageTab({
           </table>
         </div>
       </Card>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">Bing AI Performance</h2>
+        <p className="text-xs text-muted-foreground">
+          First-party citation data from Bing Webmaster Tools. Microsoft has
+          not published an official API for AI Performance yet, so this block
+          shows the latest explicitly sourced imported snapshot rather than
+          pretending it is live API data.
+        </p>
+        {bingAiLoading ? (
+          <Skeleton className="h-32" />
+        ) : !bingAi.snapshot ? (
+          <EmptyState
+            title="No Bing AI Performance snapshot imported"
+            description="Bing AI Performance exists in Webmaster Tools, but there is no supported public API for automatic citation/grounding-query sync yet."
+          />
+        ) : (
+          <Card>
+            <div className="space-y-3 p-4">
+              <div className="flex flex-wrap gap-6">
+                <div>
+                  <p className="text-xs text-muted-foreground">Total citations</p>
+                  <p className="text-2xl font-bold tabular-nums">
+                    {formatNumber(bingAi.snapshot.total_citations)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Report range</p>
+                  <p className="text-sm font-medium">{bingAi.snapshot.range_label}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Captured</p>
+                  <p className="text-sm font-medium">
+                    {relativeTime(bingAi.snapshot.captured_at)}
+                  </p>
+                </div>
+              </div>
+              {bingAi.pages.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                        <th className="py-2 font-medium">Cited page</th>
+                        <th className="py-2 text-right font-medium">Citations</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bingAi.pages.map((p) => (
+                        <tr key={p.page_url} className="border-b border-border last:border-0">
+                          <td className="max-w-[34rem] truncate py-2">{p.page_url}</td>
+                          <td className="py-2 text-right tabular-nums">{p.citations}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Source: {bingAi.snapshot.source}
+              </p>
+            </div>
+          </Card>
+        )}
+      </section>
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">
