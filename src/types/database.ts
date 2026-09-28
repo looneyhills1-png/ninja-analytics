@@ -980,6 +980,39 @@ export interface Database {
           },
         ];
       };
+      ga4_breakdown_daily: {
+        Row: {
+          site_id: string;
+          metric_date: string;
+          dimension: "country" | "page_title" | "channel";
+          dimension_value: string;
+          active_users: number | null;
+          sessions: number | null;
+          screen_page_views: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          site_id: string;
+          metric_date: string;
+          dimension: "country" | "page_title" | "channel";
+          dimension_value: string;
+          active_users?: number | null;
+          sessions?: number | null;
+          screen_page_views?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["ga4_breakdown_daily"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "ga4_breakdown_daily_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       gsc_coverage_snapshots: {
         Row: {
           site_id: string;
@@ -1262,6 +1295,7 @@ export type TablesUpdate<T extends keyof PublicSchema["Tables"]> =
 
 export type Site = Tables<"sites">;
 export type AnalyticsDaily = Tables<"analytics_daily">;
+export type Ga4BreakdownDaily = Tables<"ga4_breakdown_daily">;
 export type SearchDaily = Tables<"search_daily">;
 export type SearchQueryDaily = Tables<"search_query_daily">;
 export type SearchPageDaily = Tables<"search_page_daily">;

@@ -36,6 +36,7 @@ import { SiteReportExportButton } from "@/features/sites/SiteReportExportButton"
 import { TrajectorySection } from "@/features/sites/TrajectorySection";
 import { TrackedQueriesSection } from "@/features/sites/TrackedQueriesSection";
 import { UptimeCard } from "@/features/sites/UptimeCard";
+import { Ga4ExplorerSection } from "@/features/sites/Ga4ExplorerSection";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePrivacyMode } from "@/lib/privacy";
@@ -48,6 +49,8 @@ const GA4_METRICS: { key: AnalyticsMetricKey; label: string }[] = [
   { key: "sessions", label: "Sessions" },
   { key: "screen_page_views", label: "Page views" },
   { key: "engaged_sessions", label: "Engaged sessions" },
+  { key: "event_count", label: "Event count" },
+  { key: "key_events", label: "Key events" },
 ];
 
 /** Merge Google + Bing daily rows into one date-keyed series for the charts. */
@@ -205,6 +208,9 @@ export function SiteDetailPage() {
             analytics={metricsQuery.data?.analytics ?? []}
             search={metricsQuery.data?.search ?? []}
           />
+          {site.ga4_property_id && (
+            <Ga4ExplorerSection siteId={siteId} days={days} />
+          )}
         </>
       )}
 
@@ -333,7 +339,7 @@ function MetricsSection({
         <h2 className="text-sm font-semibold">
           Google Analytics · last {days} days
         </h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
           {GA4_METRICS.map(({ key, label }) => {
             const cur = sumAnalytics(ga.current, key);
             const prev = sumAnalytics(ga.previous, key);

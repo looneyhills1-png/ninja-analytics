@@ -19,6 +19,8 @@ import {
   getEngineQueryPositions,
   getGscCoverageSnapshots,
   getIntegrationStatuses,
+  getGa4Breakdowns,
+  getGa4Realtime,
   getKeywordOpportunities,
   getObservedSerpResults,
   getPortfolioPageDaily,
@@ -82,6 +84,9 @@ export const queryKeys = {
     ["site-search-terms", siteId, days] as const,
   siteBingVisibility: (siteId: string, days: number) =>
     ["site-bing-visibility", siteId, days] as const,
+  ga4Breakdowns: (siteId: string, days: number) =>
+    ["ga4-breakdowns", siteId, days] as const,
+  ga4Realtime: (siteId: string) => ["ga4-realtime", siteId] as const,
   fixRuns: (siteId: string) => ["fix-runs", siteId] as const,
   integrationStatuses: (siteId?: string) =>
     ["integration-statuses", siteId ?? null] as const,
@@ -170,6 +175,24 @@ export function useSiteBingVisibility(siteId: string, days: number) {
     queryKey: queryKeys.siteBingVisibility(siteId, days),
     queryFn: () => getSiteBingVisibility(siteId, days),
     enabled: !!siteId,
+  });
+}
+
+export function useGa4Breakdowns(siteId: string, days: number) {
+  return useQuery({
+    queryKey: queryKeys.ga4Breakdowns(siteId, days),
+    queryFn: () => getGa4Breakdowns(siteId, days),
+    enabled: !!siteId,
+  });
+}
+
+export function useGa4Realtime(siteId: string) {
+  return useQuery({
+    queryKey: queryKeys.ga4Realtime(siteId),
+    queryFn: () => getGa4Realtime(siteId),
+    enabled: !!siteId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 }
 

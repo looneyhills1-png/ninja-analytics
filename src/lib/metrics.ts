@@ -69,7 +69,9 @@ export type AnalyticsMetricKey =
   | "total_users"
   | "sessions"
   | "screen_page_views"
-  | "engaged_sessions";
+  | "engaged_sessions"
+  | "event_count"
+  | "key_events";
 
 export function sumAnalytics(
   rows: AnalyticsDaily[],

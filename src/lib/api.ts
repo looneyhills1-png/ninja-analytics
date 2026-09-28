@@ -20,6 +20,7 @@ import type {
   AiVisibilityPrompt,
   AiVisibilitySource,
   AnalyticsDaily,
+  Ga4BreakdownDaily,
   CommonCrawlPage,
   CommonCrawlRun,
   CompetitorDomain,
@@ -101,6 +102,75 @@ export async function getSite(
 export interface SiteMetrics {
   analytics: AnalyticsDaily[];
   search: SearchDaily[];
+}
+
+export interface Ga4BreakdownItem {
+  label: string;
+  value: number;
+}
+
+export interface Ga4BreakdownSummary {
+  countries: Ga4BreakdownItem[];
+  pages: Ga4BreakdownItem[];
+  channels: Ga4BreakdownItem[];
+}
+
+export interface Ga4RealtimeSummary {
+  activeUsers: number;
+  countries: Ga4BreakdownItem[];
+  asOf: string;
+}
+
+export async function getGa4Breakdowns(
+  siteId: string,
+  days: number,
+): Promise<Ga4BreakdownSummary> {
+  const since = format(subDays(new Date(), Math.max(days - 1, 0)), "yyyy-MM-dd");
+  const rows = await fetchAllPages<Ga4BreakdownDaily>(() =>
+    supabase
+      .from("ga4_breakdown_daily")
+      .select("*")
+      .eq("site_id", siteId)
+      .gte("metric_date", since)
+      .order("metric_date"),
+  );
+
+  const aggregate = (
+    dimension: Ga4BreakdownDaily["dimension"],
+    metric: "active_users" | "sessions" | "screen_page_views",
+  ): Ga4BreakdownItem[] => {
+    const totals = new Map<string, number>();
+    for (const row of rows) {
+      if (row.dimension !== dimension) continue;
+      const value = row[metric] ?? 0;
+      totals.set(row.dimension_value, (totals.get(row.dimension_value) ?? 0) + value);
+    }
+    return [...totals.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  };
+
+  return {
+    countries: aggregate("country", "active_users"),
+    pages: aggregate("page_title", "screen_page_views"),
+    channels: aggregate("channel", "sessions"),
+  };
+}
+
+export async function getGa4Realtime(siteId: string): Promise<Ga4RealtimeSummary> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    activeUsers: number;
+    countries: Ga4BreakdownItem[];
+    asOf: string;
+  }>("ga4-realtime", { body: { siteId } });
+  if (error) throw error;
+  return {
+    activeUsers: data?.activeUsers ?? 0,
+    countries: data?.countries ?? [],
+    asOf: data?.asOf ?? new Date().toISOString(),
+  };
 }
 
 /**
