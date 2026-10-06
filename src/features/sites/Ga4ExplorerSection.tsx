@@ -2,7 +2,6 @@ import { useGa4Breakdowns, useGa4Realtime } from "@/lib/hooks";
 import { formatNumber } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 
 function RankedList({
@@ -25,7 +24,9 @@ function RankedList({
           <span className="truncate" title={row.label}>
             {row.label}
           </span>
-          <span className="font-medium tabular-nums">{formatNumber(row.value)}</span>
+          <span className="font-medium tabular-nums">
+            {formatNumber(row.value)}
+          </span>
         </div>
       ))}
     </div>
@@ -45,9 +46,12 @@ export function Ga4ExplorerSection({
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold">GA4 audience &amp; acquisition</h2>
+        <h2 className="text-sm font-semibold">
+          GA4 audience &amp; acquisition
+        </h2>
         <p className="text-xs text-muted-foreground">
-          The same high-value views surfaced on the GA4 home screen, inside Ninja Analytics.
+          The same high-value views surfaced on the GA4 home screen, inside
+          Ninja Analytics.
         </p>
       </div>
 
