@@ -114,5 +114,8 @@ verify_jwt = false
 [functions.scheduled-inspect-urls]
 verify_jwt = false
 
+[functions.catalogue-check]
+verify_jwt = true
+
 [analytics]
 enabled = false
