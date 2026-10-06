@@ -1,7 +1,12 @@
 import { preflight, corsHeaders } from "../_shared/cors.ts";
 import { requireAdminMfa } from "../_shared/auth.ts";
 import { json } from "../_shared/response.ts";
-import { normalizeError, SyncError, codeForStatus, isRetryableStatus } from "../_shared/errors.ts";
+import {
+  normalizeError,
+  SyncError,
+  codeForStatus,
+  isRetryableStatus,
+} from "../_shared/errors.ts";
 import { getGoogleAccessToken } from "../_shared/google-auth.ts";
 import { fetchWithRetry } from "../_shared/http.ts";
 
@@ -15,10 +20,16 @@ Deno.serve(async (req) => {
       return json(405, { ok: false, error: "method_not_allowed" }, cors);
     }
     const { admin } = await requireAdminMfa(req);
-    const body = (await req.json().catch(() => null)) as { siteId?: string } | null;
+    const body = (await req.json().catch(() => null)) as {
+      siteId?: string;
+    } | null;
     const siteId = body?.siteId?.trim();
     if (!siteId) {
-      return json(400, { ok: false, error: "validation_error", message: "siteId is required" }, cors);
+      return json(
+        400,
+        { ok: false, error: "validation_error", message: "siteId is required" },
+        cors,
+      );
     }
 
     const { data: site, error } = await admin
@@ -29,7 +40,10 @@ Deno.serve(async (req) => {
     if (error) throw error;
     if (!site) return json(404, { ok: false, error: "not_found" }, cors);
     if (!site.ga4_property_id) {
-      throw new SyncError("config_missing", "No GA4 property configured for this site");
+      throw new SyncError(
+        "config_missing",
+        "No GA4 property configured for this site",
+      );
     }
 
     const token = await getGoogleAccessToken();
@@ -64,7 +78,9 @@ Deno.serve(async (req) => {
         metricValues?: Array<{ value?: string }>;
       }>;
     };
-    const metricIndex = (report.metricHeaders ?? []).findIndex((h) => h.name === "activeUsers");
+    const metricIndex = (report.metricHeaders ?? []).findIndex(
+      (h) => h.name === "activeUsers",
+    );
     const countries = (report.rows ?? [])
       .map((row) => ({
         label: row.dimensionValues?.[0]?.value || "(not set)",
@@ -74,12 +90,16 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.value - a.value);
     const activeUsers = countries.reduce((sum, row) => sum + row.value, 0);
 
-    return json(200, {
-      ok: true,
-      activeUsers,
-      countries: countries.slice(0, 10),
-      asOf: new Date().toISOString(),
-    }, cors);
+    return json(
+      200,
+      {
+        ok: true,
+        activeUsers,
+        countries: countries.slice(0, 10),
+        asOf: new Date().toISOString(),
+      },
+      cors,
+    );
   } catch (err) {
     const n = normalizeError(err);
     return json(
