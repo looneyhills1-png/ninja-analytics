@@ -7,9 +7,14 @@ name: Deploy Frontend
 #
 # Frontend env vars (VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY,
 # VITE_APP_URL) are all derived at build time from existing secrets - no
-# server-side/secret key is ever read here. VITE_SUPABASE_PUBLISHABLE_KEY
-# comes from the Supabase Management API via scripts/get_supabase_publishable_key.sh,
-# which explicitly refuses to return a secret/service_role key.
+# server-side/secret key is ever read here.
+#
+# As of the self-hosted migration, the backend is the self-hosted Supabase
+# stack (SELF_HOSTED_SUPABASE_URL / SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY),
+# reached via an outbound-only Cloudflare Tunnel - not the hosted project.
+# The hosted project (SUPABASE_PROJECT_REF) remains the rollback target; see
+# deploy-ninja-analytics.yml, which still deploys migrations/functions there
+# until the hosted project is formally retired.
 
 on:
   workflow_dispatch: {}
@@ -24,7 +29,6 @@ on:
       - "vite.config.*"
       - "tsconfig*.json"
       - ".github/workflows/deploy-frontend.yml"
-      - ".github/workflows/scripts/get_supabase_publishable_key.sh"
 
 concurrency:
   group: deploy-frontend-${{ github.ref }}
@@ -42,8 +46,8 @@ jobs:
     name: Build and deploy to Cloudflare Pages
     runs-on: ubuntu-latest
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SELF_HOSTED_SUPABASE_URL: ${{ secrets.SELF_HOSTED_SUPABASE_URL }}
+      SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
@@ -56,8 +60,8 @@ jobs:
 
       - name: Sanity-check required secrets are present
         run: |
-          : "${SUPABASE_ACCESS_TOKEN:?SUPABASE_ACCESS_TOKEN secret is not set}"
-          : "${SUPABASE_PROJECT_REF:?SUPABASE_PROJECT_REF secret is not set}"
+          : "${SELF_HOSTED_SUPABASE_URL:?SELF_HOSTED_SUPABASE_URL secret is not set}"
+          : "${SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY:?SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY secret is not set}"
           : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN secret is not set}"
           : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID secret is not set}"
 
@@ -66,28 +70,25 @@ jobs:
       - name: Resolve frontend env vars (no server-side secrets)
         id: env
         run: |
-          key=$(bash .github/workflows/scripts/get_supabase_publishable_key.sh)
-          echo "::add-mask::$key"
-          {
-            echo "publishable_key=$key"
-          } >> "$GITHUB_OUTPUT"
-          echo "Resolved VITE_SUPABASE_URL=https://${SUPABASE_PROJECT_REF}.supabase.co"
+          echo "::add-mask::${SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY}"
+          echo "Resolved VITE_SUPABASE_URL=${SELF_HOSTED_SUPABASE_URL}"
           echo "Resolved VITE_APP_URL=${PAGES_URL}"
 
       - name: Build
         env:
-          VITE_SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ steps.env.outputs.publishable_key }}
+          VITE_SUPABASE_URL: ${{ secrets.SELF_HOSTED_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY }}
           VITE_APP_URL: ${{ env.PAGES_URL }}
         run: npm run build
 
-      - name: Confirm the correct project ref is baked into the build
+      - name: Confirm the self-hosted backend is baked into the build
         run: |
-          if ! grep -rq "${SUPABASE_PROJECT_REF}" dist/assets/*.js; then
-            echo "::error::Built assets do not reference the linked Supabase project ref - VITE_SUPABASE_URL was not baked in correctly."
+          host=$(echo "$SELF_HOSTED_SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')
+          if ! grep -rq "$host" dist/assets/*.js; then
+            echo "::error::Built assets do not reference the self-hosted Supabase host ($host) - VITE_SUPABASE_URL was not baked in correctly."
             exit 1
           fi
-          echo "Confirmed: built assets reference the linked Supabase project."
+          echo "Confirmed: built assets reference the self-hosted Supabase backend ($host)."
 
       - name: Ensure the Cloudflare Pages project exists
         continue-on-error: true
@@ -120,13 +121,14 @@ jobs:
 
       - name: Verify the Supabase Auth endpoint the app will call is reachable
         env:
-          PUBLISHABLE_KEY: ${{ steps.env.outputs.publishable_key }}
+          PUBLISHABLE_KEY: ${{ secrets.SELF_HOSTED_SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          # Supabase's gateway rejects every request without an apikey header
-          # before it reaches the Auth service - even /auth/v1/health, which
-          # otherwise needs no auth of its own. Use the same publishable key
-          # the deployed app itself sends (never the service-role key).
-          auth_url="https://${SUPABASE_PROJECT_REF}.supabase.co/auth/v1/health"
+          # The self-hosted gateway (Envoy) rejects every request without an
+          # apikey header before it reaches the Auth service - even
+          # /auth/v1/health, which otherwise needs no auth of its own. Use the
+          # same publishable key the deployed app itself sends (never the
+          # service-role/secret key).
+          auth_url="${SELF_HOSTED_SUPABASE_URL}/auth/v1/health"
           code=$(curl -sS -o /tmp/auth_health.json -w '%{http_code}' \
             -H "apikey: ${PUBLISHABLE_KEY}" \
             "$auth_url")
