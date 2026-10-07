@@ -125,7 +125,10 @@ export async function getGa4Breakdowns(
   siteId: string,
   days: number,
 ): Promise<Ga4BreakdownSummary> {
-  const since = format(subDays(new Date(), Math.max(days - 1, 0)), "yyyy-MM-dd");
+  const since = format(
+    subDays(new Date(), Math.max(days - 1, 0)),
+    "yyyy-MM-dd",
+  );
   const rows = await fetchAllPages<Ga4BreakdownDaily>(() =>
     supabase
       .from("ga4_breakdown_daily")
@@ -143,7 +146,10 @@ export async function getGa4Breakdowns(
     for (const row of rows) {
       if (row.dimension !== dimension) continue;
       const value = row[metric] ?? 0;
-      totals.set(row.dimension_value, (totals.get(row.dimension_value) ?? 0) + value);
+      totals.set(
+        row.dimension_value,
+        (totals.get(row.dimension_value) ?? 0) + value,
+      );
     }
     return [...totals.entries()]
       .map(([label, value]) => ({ label, value }))
@@ -158,7 +164,9 @@ export async function getGa4Breakdowns(
   };
 }
 
-export async function getGa4Realtime(siteId: string): Promise<Ga4RealtimeSummary> {
+export async function getGa4Realtime(
+  siteId: string,
+): Promise<Ga4RealtimeSummary> {
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     activeUsers: number;

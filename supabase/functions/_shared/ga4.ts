@@ -52,7 +52,11 @@ async function runReport(
   return (await res.json()) as Ga4Report;
 }
 
-function intMetric(report: Ga4Report, row: NonNullable<Ga4Report["rows"]>[number], name: string): number {
+function intMetric(
+  report: Ga4Report,
+  row: NonNullable<Ga4Report["rows"]>[number],
+  name: string,
+): number {
   const headers = (report.metricHeaders ?? []).map((h) => h.name ?? "");
   const idx = headers.indexOf(name);
   if (idx < 0) throw new Error(`Missing GA4 metric header: ${name}`);
@@ -82,9 +86,12 @@ function normalizeBreakdown(
       screen_page_views: null,
       updated_at: updatedAt,
     };
-    if (dimension === "country") base.active_users = intMetric(report, row, "activeUsers");
-    if (dimension === "page_title") base.screen_page_views = intMetric(report, row, "screenPageViews");
-    if (dimension === "channel") base.sessions = intMetric(report, row, "sessions");
+    if (dimension === "country")
+      base.active_users = intMetric(report, row, "activeUsers");
+    if (dimension === "page_title")
+      base.screen_page_views = intMetric(report, row, "screenPageViews");
+    if (dimension === "channel")
+      base.sessions = intMetric(report, row, "sessions");
     byKey.set(`${metric_date}\u0000${dimension}\u0000${value}`, base);
   }
   return [...byKey.values()];
@@ -169,11 +176,9 @@ export const ga4Adapter: SyncAdapter = async ({
       });
       const rows = normalizeBreakdown(report, site.id, spec.key, updatedAt);
       if (rows.length > 0) {
-        const { error } = await admin
-          .from("ga4_breakdown_daily")
-          .upsert(rows, {
-            onConflict: "site_id,metric_date,dimension,dimension_value",
-          });
+        const { error } = await admin.from("ga4_breakdown_daily").upsert(rows, {
+          onConflict: "site_id,metric_date,dimension,dimension_value",
+        });
         if (error) throw error;
       }
       rowsFetched += report.rows?.length ?? 0;

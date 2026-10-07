@@ -142,6 +142,8 @@ export function demoMetrics(site: DemoSite, days = 720): SiteMetrics {
       sessions,
       screen_page_views: Math.round(sessions * 2.25),
       engaged_sessions: Math.round(sessions * 0.68),
+      event_count: Math.round(sessions * 3.1),
+      key_events: Math.round(sessions * 0.08),
       updated_at: "2026-07-12T04:20:00.000Z",
     });
     search.push({

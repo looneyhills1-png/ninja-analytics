@@ -19,6 +19,8 @@ function analyticsRow(
     sessions: 0,
     screen_page_views: 0,
     engaged_sessions: 0,
+    event_count: 0,
+    key_events: 0,
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };
