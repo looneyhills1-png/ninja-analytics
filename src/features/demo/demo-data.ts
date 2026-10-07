@@ -143,6 +143,8 @@ export function demoMetrics(site: DemoSite, days = 720): SiteMetrics {
       screen_page_views: Math.round(sessions * 2.25),
       engaged_sessions: Math.round(sessions * 0.68),
       updated_at: "2026-07-12T04:20:00.000Z",
+      event_count: Math.round(sessions * 3.4),
+      key_events: Math.round(sessions * 0.09),
     });
     search.push({
       site_id: site.id,

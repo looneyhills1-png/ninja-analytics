@@ -96,6 +96,8 @@ export interface Database {
           screen_page_views: number;
           engaged_sessions: number;
           updated_at: string;
+          event_count: number;
+          key_events: number;
         };
         Insert: {
           site_id: string;
@@ -106,6 +108,8 @@ export interface Database {
           screen_page_views?: number;
           engaged_sessions?: number;
           updated_at?: string;
+          event_count?: number;
+          key_events?: number;
         };
         Update: Partial<
           Database["public"]["Tables"]["analytics_daily"]["Insert"]

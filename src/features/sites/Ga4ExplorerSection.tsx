@@ -2,7 +2,6 @@ import { useGa4Breakdowns, useGa4Realtime } from "@/lib/hooks";
 import { formatNumber } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 
 function RankedList({

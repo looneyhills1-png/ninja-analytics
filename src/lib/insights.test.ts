@@ -160,6 +160,8 @@ describe("computeInsights", () => {
           screen_page_views: 5,
           engaged_sessions: 5,
           updated_at: NOW.toISOString(),
+          event_count: 5,
+          key_events: 5,
         },
       ],
       search: search(s1.id, [10, 10, 10, 10]),
