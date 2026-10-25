@@ -98,8 +98,6 @@ export interface Database {
           event_count: number;
           key_events: number;
           updated_at: string;
-          event_count: number;
-          key_events: number;
         };
         Insert: {
           site_id: string;
@@ -112,8 +110,6 @@ export interface Database {
           event_count?: number;
           key_events?: number;
           updated_at?: string;
-          event_count?: number;
-          key_events?: number;
         };
         Update: Partial<
           Database["public"]["Tables"]["analytics_daily"]["Insert"]
