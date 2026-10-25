@@ -24,7 +24,9 @@ function RankedList({
           <span className="truncate" title={row.label}>
             {row.label}
           </span>
-          <span className="font-medium tabular-nums">{formatNumber(row.value)}</span>
+          <span className="font-medium tabular-nums">
+            {formatNumber(row.value)}
+          </span>
         </div>
       ))}
     </div>
@@ -44,9 +46,12 @@ export function Ga4ExplorerSection({
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold">GA4 audience &amp; acquisition</h2>
+        <h2 className="text-sm font-semibold">
+          GA4 audience &amp; acquisition
+        </h2>
         <p className="text-xs text-muted-foreground">
-          The same high-value views surfaced on the GA4 home screen, inside Ninja Analytics.
+          The same high-value views surfaced on the GA4 home screen, inside
+          Ninja Analytics.
         </p>
       </div>
 

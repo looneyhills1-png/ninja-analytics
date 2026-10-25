@@ -58,14 +58,19 @@ function nowIso() {
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 async function fetchJson(url: string, timeoutMs = 15000): Promise<any> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" }, signal: ctrl.signal });
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: ctrl.signal,
+    });
     const text = await res.text();
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
     return JSON.parse(text);
@@ -92,7 +97,10 @@ async function fetchTicketmasterJson(url: string): Promise<any> {
 // ---------------------------------------------------------------------
 // Usage counters (requirement 11)
 // ---------------------------------------------------------------------
-async function checkAndBumpUsageCounters(): Promise<{ ok: boolean; reason?: string }> {
+async function checkAndBumpUsageCounters(): Promise<{
+  ok: boolean;
+  reason?: string;
+}> {
   const today = new Date();
   const dayKey = today.toISOString().slice(0, 10);
   const monthKey = today.toISOString().slice(0, 7);
@@ -104,10 +112,16 @@ async function checkAndBumpUsageCounters(): Promise<{ ok: boolean; reason?: stri
   const month = rows.find((r: any) => r.period_key === monthKey);
 
   if (day && day.invocation_count >= day.hard_limit) {
-    return { ok: false, reason: `daily hard limit reached (${day.invocation_count}/${day.hard_limit})` };
+    return {
+      ok: false,
+      reason: `daily hard limit reached (${day.invocation_count}/${day.hard_limit})`,
+    };
   }
   if (month && month.invocation_count >= month.hard_limit) {
-    return { ok: false, reason: `monthly hard limit reached (${month.invocation_count}/${month.hard_limit})` };
+    return {
+      ok: false,
+      reason: `monthly hard limit reached (${month.invocation_count}/${month.hard_limit})`,
+    };
   }
 
   await sql`
@@ -140,8 +154,16 @@ interface NormalisedRecord {
 
 async function fingerprintOf(r: NormalisedRecord): Promise<string> {
   const stable = JSON.stringify([
-    r.canonicalUrl, r.name, r.venue, r.city, r.eventDate, r.status,
-    r.priceMin, r.priceMax, r.currency, r.seller,
+    r.canonicalUrl,
+    r.name,
+    r.venue,
+    r.city,
+    r.eventDate,
+    r.status,
+    r.priceMin,
+    r.priceMax,
+    r.currency,
+    r.seller,
   ]);
   return sha256Hex(stable);
 }
@@ -174,31 +196,51 @@ function isGenuineOasisTitle(title: string): boolean {
   return !OASIS_CONTAMINATION_PATTERNS.some((re) => re.test(title));
 }
 
-async function resolveOasisDiscoveryAttractionId(): Promise<{ id: string; source: string } | { error: string }> {
+async function resolveOasisDiscoveryAttractionId(): Promise<
+  { id: string; source: string } | { error: string }
+> {
   if (OASIS_PINNED_DISCOVERY_ATTRACTION_ID) {
-    return { id: OASIS_PINNED_DISCOVERY_ATTRACTION_ID, source: "pinned-config" };
+    return {
+      id: OASIS_PINNED_DISCOVERY_ATTRACTION_ID,
+      source: "pinned-config",
+    };
   }
   const url = `https://app.ticketmaster.com/discovery/v2/attractions.json?keyword=Oasis&classificationName=Music&size=50&apikey=${TICKETMASTER_API_KEY}`;
   const data = await fetchTicketmasterJson(url);
   const attractions = data?._embedded?.attractions ?? [];
   const exact = attractions.filter((a: any) => {
-    const nameMatches = String(a?.name ?? "").trim().toLowerCase() === "oasis";
-    const classifications = Array.isArray(a?.classifications) ? a.classifications : [];
-    const isMusic = classifications.length === 0 ||
-      classifications.some((c: any) => /^music$/i.test(String(c?.segment?.name ?? "")));
+    const nameMatches =
+      String(a?.name ?? "")
+        .trim()
+        .toLowerCase() === "oasis";
+    const classifications = Array.isArray(a?.classifications)
+      ? a.classifications
+      : [];
+    const isMusic =
+      classifications.length === 0 ||
+      classifications.some((c: any) =>
+        /^music$/i.test(String(c?.segment?.name ?? "")),
+      );
     return nameMatches && isMusic;
   });
   if (exact.length !== 1) {
-    return { error: `expected exactly 1 exact Music attraction named Oasis, found ${exact.length}` };
+    return {
+      error: `expected exactly 1 exact Music attraction named Oasis, found ${exact.length}`,
+    };
   }
-  return { id: String(exact[0].id), source: "exact-attraction-name-resolution" };
+  return {
+    id: String(exact[0].id),
+    source: "exact-attraction-name-resolution",
+  };
 }
 
 async function checkOasisTicketmaster(): Promise<NormalisedRecord[]> {
-  if (!TICKETMASTER_API_KEY) throw new Error("TICKETMASTER_API_KEY not configured");
+  if (!TICKETMASTER_API_KEY)
+    throw new Error("TICKETMASTER_API_KEY not configured");
 
   const identity = await resolveOasisDiscoveryAttractionId();
-  if ("error" in identity) throw new Error(`identity resolution failed: ${identity.error}`);
+  if ("error" in identity)
+    throw new Error(`identity resolution failed: ${identity.error}`);
 
   const url = `https://app.ticketmaster.com/discovery/v2/events.json?countryCode=GB&attractionId=${encodeURIComponent(identity.id)}&size=100&sort=date,asc&apikey=${TICKETMASTER_API_KEY}`;
   const data = await fetchTicketmasterJson(url);
@@ -207,13 +249,16 @@ async function checkOasisTicketmaster(): Promise<NormalisedRecord[]> {
   const out: NormalisedRecord[] = [];
   for (const e of events) {
     const attractionIds: string[] = (e?._embedded?.attractions ?? [])
-      .map((a: any) => a?.id).filter(Boolean).map(String);
+      .map((a: any) => a?.id)
+      .filter(Boolean)
+      .map(String);
     if (!attractionIds.includes(identity.id)) continue;
     if (!isGenuineOasisTitle(String(e?.name ?? ""))) continue;
 
     const venue = e?._embedded?.venues?.[0];
     const priceRanges = Array.isArray(e?.priceRanges) ? e.priceRanges : [];
-    const gbp = priceRanges.find((p: any) => p?.currency === "GBP") ?? priceRanges[0];
+    const gbp =
+      priceRanges.find((p: any) => p?.currency === "GBP") ?? priceRanges[0];
 
     out.push({
       providerEventId: String(e.id),
@@ -227,7 +272,11 @@ async function checkOasisTicketmaster(): Promise<NormalisedRecord[]> {
       priceMax: gbp?.max ?? null,
       currency: gbp?.currency ?? null,
       seller: "Ticketmaster",
-      raw: { discoveryAttractionId: identity.id, resolutionSource: identity.source, legacyArtistId: OASIS_LEGACY_ARTIST_ID },
+      raw: {
+        discoveryAttractionId: identity.id,
+        resolutionSource: identity.source,
+        legacyArtistId: OASIS_LEGACY_ARTIST_ID,
+      },
     });
   }
   return out;
@@ -243,8 +292,8 @@ async function checkOasisTicketmaster(): Promise<NormalisedRecord[]> {
 const SEE_TICKETS_AWIN_FEED_ID = 35853;
 
 function isGenuineGlastonburyProduct(name: string): boolean {
-  const n = String(name || '').toLowerCase();
-  return n.includes('glastonbury') && n.includes('2027');
+  const n = String(name || "").toLowerCase();
+  return n.includes("glastonbury") && n.includes("2027");
 }
 
 // Minimal RFC4180 CSV parser - same approach as scripts/glastonbury-watch.js.
@@ -256,20 +305,42 @@ function parseCsv(text: string): string[][] {
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (inQuotes) {
-      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
-      else field += c;
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else inQuotes = false;
+      } else field += c;
     } else if (c === '"') inQuotes = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (c === "\r") { /* skip */ }
-    else field += c;
+    else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else if (c === "\r") {
+      /* skip */
+    } else field += c;
   }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
   return rows;
 }
 
-async function downloadAwinFeedCsv(feedId: number): Promise<{ rows: string[][]; rawText: string }> {
-  const columns = ["product_name", "merchant_product_id", "aw_deep_link", "search_price", "currency"].join("%2C");
+async function downloadAwinFeedCsv(
+  feedId: number,
+): Promise<{ rows: string[][]; rawText: string }> {
+  const columns = [
+    "product_name",
+    "merchant_product_id",
+    "aw_deep_link",
+    "search_price",
+    "currency",
+  ].join("%2C");
   const url = `https://productdata.awin.com/datafeed/download/apikey/${AWIN_DATAFEED_API_KEY}/fid/${feedId}/format/csv/language/en/delimiter/%2C/compression/gzip/adultcontent/1/columns/${columns}/`;
 
   const ctrl = new AbortController();
@@ -286,11 +357,15 @@ async function downloadAwinFeedCsv(feedId: number): Promise<{ rows: string[][]; 
   const ds = new DecompressionStream("gzip");
   const decompressed = new Response(new Response(bytes).body!.pipeThrough(ds));
   const csv = await decompressed.text();
-  return { rows: parseCsv(csv).filter((r) => r.length > 1 && r.some((c) => c.length)), rawText: csv };
+  return {
+    rows: parseCsv(csv).filter((r) => r.length > 1 && r.some((c) => c.length)),
+    rawText: csv,
+  };
 }
 
 async function checkGlastonburyAwinFeed(): Promise<NormalisedRecord[]> {
-  if (!AWIN_DATAFEED_API_KEY) throw new Error("AWIN_DATAFEED_API_KEY not configured");
+  if (!AWIN_DATAFEED_API_KEY)
+    throw new Error("AWIN_DATAFEED_API_KEY not configured");
 
   const { rows } = await downloadAwinFeedCsv(SEE_TICKETS_AWIN_FEED_ID);
   const header = rows[0];
@@ -317,7 +392,10 @@ async function checkGlastonburyAwinFeed(): Promise<NormalisedRecord[]> {
       priceMax: Number.isFinite(price) ? price : null,
       currency: r[currencyIdx] || null,
       seller: "See Tickets",
-      raw: { feedId: SEE_TICKETS_AWIN_FEED_ID, productsScanned: rows.length - 1 },
+      raw: {
+        feedId: SEE_TICKETS_AWIN_FEED_ID,
+        productsScanned: rows.length - 1,
+      },
     });
   }
   return out;
@@ -333,10 +411,16 @@ async function checkGlastonburyAwinFeed(): Promise<NormalisedRecord[]> {
 // Treated as one "record" (a single synthetic id) so it plugs into the
 // same reconcile/fingerprint machinery as the other checks.
 // ---------------------------------------------------------------------
-const TICKETMASTER_SEGMENTS = ["Music", "Sports", "Arts & Theatre", "Miscellaneous"];
+const TICKETMASTER_SEGMENTS = [
+  "Music",
+  "Sports",
+  "Arts & Theatre",
+  "Miscellaneous",
+];
 
 async function checkTicketmasterUkCount(): Promise<NormalisedRecord[]> {
-  if (!TICKETMASTER_API_KEY) throw new Error("TICKETMASTER_API_KEY not configured");
+  if (!TICKETMASTER_API_KEY)
+    throw new Error("TICKETMASTER_API_KEY not configured");
 
   let total = 0;
   for (const segment of TICKETMASTER_SEGMENTS) {
@@ -345,20 +429,22 @@ async function checkTicketmasterUkCount(): Promise<NormalisedRecord[]> {
     total += Number(data?.page?.totalElements ?? 0);
   }
 
-  return [{
-    providerEventId: "uk-total",
-    canonicalUrl: null,
-    name: "Ticketmaster UK total event count",
-    venue: null,
-    city: null,
-    eventDate: null,
-    status: "unknown",
-    priceMin: total, // reusing the numeric field to store the count so the existing fingerprint/diff machinery just works
-    priceMax: total,
-    currency: null,
-    seller: null,
-    raw: { totalElements: total, segments: TICKETMASTER_SEGMENTS },
-  }];
+  return [
+    {
+      providerEventId: "uk-total",
+      canonicalUrl: null,
+      name: "Ticketmaster UK total event count",
+      venue: null,
+      city: null,
+      eventDate: null,
+      status: "unknown",
+      priceMin: total, // reusing the numeric field to store the count so the existing fingerprint/diff machinery just works
+      priceMax: total,
+      currency: null,
+      seller: null,
+      raw: { totalElements: total, segments: TICKETMASTER_SEGMENTS },
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------
@@ -373,37 +459,48 @@ const AWIN_FEED_HASH_SOURCES: Record<string, number> = {
   lovetovisit_awin_feed: 97905, // LoveToVisit, advertiser 86769 - see scripts/lovetovisit-attach.js
 };
 
-async function checkAwinFeedHash(sourceKey: string): Promise<NormalisedRecord[]> {
-  if (!AWIN_DATAFEED_API_KEY) throw new Error("AWIN_DATAFEED_API_KEY not configured");
+async function checkAwinFeedHash(
+  sourceKey: string,
+): Promise<NormalisedRecord[]> {
+  if (!AWIN_DATAFEED_API_KEY)
+    throw new Error("AWIN_DATAFEED_API_KEY not configured");
   const feedId = AWIN_FEED_HASH_SOURCES[sourceKey];
   if (!feedId) throw new Error(`no feed id configured for ${sourceKey}`);
 
   const { rows, rawText } = await downloadAwinFeedCsv(feedId);
   const hash = await sha256Hex(rawText);
 
-  return [{
-    providerEventId: `feed-${feedId}`,
-    canonicalUrl: null,
-    name: `Awin feed ${feedId} content hash`,
-    venue: null,
-    city: null,
-    eventDate: null,
-    status: "unknown",
-    priceMin: null,
-    priceMax: null,
-    currency: null,
-    seller: hash, // reusing the seller text field to carry the hash through the existing fingerprint/diff machinery
-    raw: { feedId, productCount: rows.length - 1 },
-  }];
+  return [
+    {
+      providerEventId: `feed-${feedId}`,
+      canonicalUrl: null,
+      name: `Awin feed ${feedId} content hash`,
+      venue: null,
+      city: null,
+      eventDate: null,
+      status: "unknown",
+      priceMin: null,
+      priceMax: null,
+      currency: null,
+      seller: hash, // reusing the seller text field to carry the hash through the existing fingerprint/diff machinery
+      raw: { feedId, productCount: rows.length - 1 },
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------
 // Compare a source's freshly normalised records against the last known
 // snapshot in catalogue.events, upsert, and log any material changes.
 // ---------------------------------------------------------------------
-async function reconcileSource(sourceKey: string, records: NormalisedRecord[]): Promise<{ changes: number }> {
-  const existingRows = await sql`select * from catalogue.events where source_key = ${sourceKey}`;
-  const existingByProviderId = new Map(existingRows.map((r: any) => [r.provider_event_id, r]));
+async function reconcileSource(
+  sourceKey: string,
+  records: NormalisedRecord[],
+): Promise<{ changes: number }> {
+  const existingRows =
+    await sql`select * from catalogue.events where source_key = ${sourceKey}`;
+  const existingByProviderId = new Map(
+    existingRows.map((r: any) => [r.provider_event_id, r]),
+  );
 
   let changeCount = 0;
   const now = nowIso();
@@ -436,14 +533,31 @@ async function reconcileSource(sourceKey: string, records: NormalisedRecord[]): 
     }
 
     let changeType = "date_or_venue_changed";
-    if (rec.status === "cancelled" && existing.status !== "cancelled") changeType = "cancelled";
-    else if (rec.status === "postponed" && existing.status !== "postponed") changeType = "postponed";
-    else if (rec.status === "offsale" && existing.status !== "offsale") changeType = "expired";
-    else if (/sold.?out/i.test(rec.status) && !/sold.?out/i.test(existing.status ?? "")) changeType = "sold_out";
-    else if (rec.status === "onsale" && existing.status !== "onsale") changeType = "now_on_sale";
-    else if (rec.priceMin !== existing.price_min || rec.priceMax !== existing.price_max) changeType = "price_changed";
-    else if (rec.seller && rec.seller !== existing.seller) changeType = "seller_added";
-    else if (rec.eventDate !== existing.event_date || rec.venue !== existing.venue) changeType = "date_or_venue_changed";
+    if (rec.status === "cancelled" && existing.status !== "cancelled")
+      changeType = "cancelled";
+    else if (rec.status === "postponed" && existing.status !== "postponed")
+      changeType = "postponed";
+    else if (rec.status === "offsale" && existing.status !== "offsale")
+      changeType = "expired";
+    else if (
+      /sold.?out/i.test(rec.status) &&
+      !/sold.?out/i.test(existing.status ?? "")
+    )
+      changeType = "sold_out";
+    else if (rec.status === "onsale" && existing.status !== "onsale")
+      changeType = "now_on_sale";
+    else if (
+      rec.priceMin !== existing.price_min ||
+      rec.priceMax !== existing.price_max
+    )
+      changeType = "price_changed";
+    else if (rec.seller && rec.seller !== existing.seller)
+      changeType = "seller_added";
+    else if (
+      rec.eventDate !== existing.event_date ||
+      rec.venue !== existing.venue
+    )
+      changeType = "date_or_venue_changed";
 
     await sql`
       update catalogue.events set
@@ -474,7 +588,9 @@ async function triggerCloudflareRebuild(): Promise<boolean> {
   const res = await fetch(CF_DEPLOY_HOOK_URL, { method: "POST" });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Cloudflare deploy hook failed: HTTP ${res.status}: ${body.slice(0, 300)}`);
+    throw new Error(
+      `Cloudflare deploy hook failed: HTTP ${res.status}: ${body.slice(0, 300)}`,
+    );
   }
   return true;
 }
@@ -482,7 +598,9 @@ async function triggerCloudflareRebuild(): Promise<boolean> {
 // ---------------------------------------------------------------------
 // Per-source backoff + cooldown gating, then the actual check.
 // ---------------------------------------------------------------------
-async function runSource(source: any): Promise<{ ok: boolean; changes: number; rebuildNeeded: boolean }> {
+async function runSource(
+  source: any,
+): Promise<{ ok: boolean; changes: number; rebuildNeeded: boolean }> {
   const checkers: Record<string, () => Promise<NormalisedRecord[]>> = {
     oasis_ticketmaster: checkOasisTicketmaster,
     glastonbury_awin_feed: checkGlastonburyAwinFeed,
@@ -509,11 +627,15 @@ async function runSource(source: any): Promise<{ ok: boolean; changes: number; r
     let rebuildNeeded = false;
     if (changes > 0 && source.pending_apply_action !== "none") {
       const cooldownMs = (source.dispatch_cooldown_minutes ?? 20) * 60_000;
-      const lastDispatch = source.last_dispatched_at ? new Date(source.last_dispatched_at).getTime() : 0;
+      const lastDispatch = source.last_dispatched_at
+        ? new Date(source.last_dispatched_at).getTime()
+        : 0;
       const withinCooldown = Date.now() - lastDispatch < cooldownMs;
 
       if (withinCooldown) {
-        console.log(`${source.key}: ${changes} change(s) found but within cooldown - not rebuilding yet`);
+        console.log(
+          `${source.key}: ${changes} change(s) found but within cooldown - not rebuilding yet`,
+        );
       } else {
         rebuildNeeded = true;
         await sql`update catalogue.sources set last_dispatched_at = now() where key = ${source.key}`;
@@ -523,8 +645,13 @@ async function runSource(source: any): Promise<{ ok: boolean; changes: number; r
     return { ok: true, changes, rebuildNeeded };
   } catch (e) {
     const failures = (source.consecutive_failures ?? 0) + 1;
-    const backoffMinutes = Math.min(BACKOFF_BASE_MINUTES * 2 ** (failures - 1), BACKOFF_CAP_MINUTES);
-    const nextAllowed = new Date(Date.now() + backoffMinutes * 60_000).toISOString();
+    const backoffMinutes = Math.min(
+      BACKOFF_BASE_MINUTES * 2 ** (failures - 1),
+      BACKOFF_CAP_MINUTES,
+    );
+    const nextAllowed = new Date(
+      Date.now() + backoffMinutes * 60_000,
+    ).toISOString();
 
     await sql`
       update catalogue.sources set
@@ -532,7 +659,9 @@ async function runSource(source: any): Promise<{ ok: boolean; changes: number; r
         consecutive_failures = ${failures}, next_allowed_check_at = ${nextAllowed}
       where key = ${source.key}
     `;
-    console.error(`${source.key} check failed (attempt ${failures}, next retry in ${backoffMinutes}m): ${(e as Error).message}`);
+    console.error(
+      `${source.key} check failed (attempt ${failures}, next retry in ${backoffMinutes}m): ${(e as Error).message}`,
+    );
     return { ok: false, changes: 0, rebuildNeeded: false };
   }
 }
@@ -550,14 +679,20 @@ async function handleHourlyCheck(): Promise<Response> {
     const usage = await checkAndBumpUsageCounters();
     if (!usage.ok) {
       await sql`update catalogue.run_log set finished_at = now(), status = 'skipped_limit_reached', error = ${usage.reason} where id = ${runId}`;
-      return Response.json({ status: "skipped_limit_reached", reason: usage.reason });
+      return Response.json({
+        status: "skipped_limit_reached",
+        reason: usage.reason,
+      });
     }
 
     const sources = await sql`
       select * from catalogue.sources where active = true and next_allowed_check_at <= now()
     `;
 
-    let checked = 0, failed = 0, totalChanges = 0, anyRebuildNeeded = false;
+    let checked = 0,
+      failed = 0,
+      totalChanges = 0,
+      anyRebuildNeeded = false;
 
     for (const source of sources) {
       checked++;
@@ -572,7 +707,8 @@ async function handleHourlyCheck(): Promise<Response> {
       deployTriggered = await triggerCloudflareRebuild();
     }
 
-    const status = failed === 0 ? "ok" : (failed === checked ? "error" : "partial_failure");
+    const status =
+      failed === 0 ? "ok" : failed === checked ? "error" : "partial_failure";
     await sql`
       update catalogue.run_log set
         finished_at = now(), status = ${status}, sources_checked = ${checked}, sources_failed = ${failed},
@@ -580,10 +716,20 @@ async function handleHourlyCheck(): Promise<Response> {
       where id = ${runId}
     `;
 
-    return Response.json({ status, runId, sourcesChecked: checked, sourcesFailed: failed, changesFound: totalChanges, cloudflareDeployTriggered: deployTriggered });
+    return Response.json({
+      status,
+      runId,
+      sourcesChecked: checked,
+      sourcesFailed: failed,
+      changesFound: totalChanges,
+      cloudflareDeployTriggered: deployTriggered,
+    });
   } catch (e) {
     await sql`update catalogue.run_log set finished_at = now(), status = 'error', error = ${String((e as Error).message ?? e).slice(0, 1000)} where id = ${runId}`;
-    return Response.json({ status: "error", error: (e as Error).message }, { status: 500 });
+    return Response.json(
+      { status: "error", error: (e as Error).message },
+      { status: 500 },
+    );
   }
 }
 
@@ -601,8 +747,14 @@ async function handlePendingChanges(): Promise<Response> {
     where c.dispatched = false
     order by c.detected_at asc
   `;
-  const actions = [...new Set(rows.map((r: any) => r.pending_apply_action))].filter((a) => a !== "none");
-  return Response.json({ pendingChangeIds: rows.map((r: any) => r.id), actions, count: rows.length });
+  const actions = [
+    ...new Set(rows.map((r: any) => r.pending_apply_action)),
+  ].filter((a) => a !== "none");
+  return Response.json({
+    pendingChangeIds: rows.map((r: any) => r.id),
+    actions,
+    count: rows.length,
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -633,7 +785,10 @@ async function handleAck(req: Request): Promise<Response> {
 // could copy from client-side JS) still can't trigger a check or read
 // pending changes.
 function isAuthorised(req: Request): boolean {
-  return !!CATALOGUE_PENDING_SECRET && req.headers.get("X-Catalogue-Secret") === CATALOGUE_PENDING_SECRET;
+  return (
+    !!CATALOGUE_PENDING_SECRET &&
+    req.headers.get("X-Catalogue-Secret") === CATALOGUE_PENDING_SECRET
+  );
 }
 
 Deno.serve(async (req) => {

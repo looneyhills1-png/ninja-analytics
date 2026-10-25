@@ -95,6 +95,8 @@ export interface Database {
           sessions: number;
           screen_page_views: number;
           engaged_sessions: number;
+          event_count: number;
+          key_events: number;
           updated_at: string;
           event_count: number;
           key_events: number;
@@ -107,6 +109,8 @@ export interface Database {
           sessions?: number;
           screen_page_views?: number;
           engaged_sessions?: number;
+          event_count?: number;
+          key_events?: number;
           updated_at?: string;
           event_count?: number;
           key_events?: number;

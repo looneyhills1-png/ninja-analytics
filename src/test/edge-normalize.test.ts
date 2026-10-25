@@ -127,6 +127,8 @@ describe("normalizeGa4Rows", () => {
       { name: "sessions" },
       { name: "screenPageViews" },
       { name: "engagedSessions" },
+      { name: "eventCount" },
+      { name: "keyEvents" },
     ],
     rows: [
       {
@@ -137,6 +139,8 @@ describe("normalizeGa4Rows", () => {
           { value: "15" },
           { value: "40" },
           { value: "9" },
+          { value: "55" },
+          { value: "3" },
         ],
       },
     ],
@@ -151,6 +155,8 @@ describe("normalizeGa4Rows", () => {
       sessions: 15,
       screen_page_views: 40,
       engaged_sessions: 9,
+      event_count: 55,
+      key_events: 3,
     });
   });
 
@@ -162,6 +168,8 @@ describe("normalizeGa4Rows", () => {
         { name: "totalUsers" },
         { name: "screenPageViews" },
         { name: "engagedSessions" },
+        { name: "keyEvents" },
+        { name: "eventCount" },
       ],
       rows: [
         {
@@ -172,6 +180,8 @@ describe("normalizeGa4Rows", () => {
             { value: "12" },
             { value: "40" },
             { value: "9" },
+            { value: "3" },
+            { value: "55" },
           ],
         },
       ],
