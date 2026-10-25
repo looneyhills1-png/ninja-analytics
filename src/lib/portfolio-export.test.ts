@@ -41,8 +41,6 @@ function analyticsRow(
     event_count: sessions * 3,
     key_events: Math.round(sessions * 0.1),
     updated_at: NOW.toISOString(),
-    event_count: sessions * 3,
-    key_events: Math.round(sessions * 0.1),
   };
 }
 
