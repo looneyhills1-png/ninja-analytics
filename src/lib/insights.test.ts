@@ -159,8 +159,6 @@ describe("computeInsights", () => {
           sessions: 5,
           screen_page_views: 5,
           engaged_sessions: 5,
-          event_count: 5,
-          key_events: 1,
           updated_at: NOW.toISOString(),
           event_count: 5,
           key_events: 5,
