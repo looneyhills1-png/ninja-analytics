@@ -1,8 +1,9 @@
 name: CI
 
+# Main branch deploy workflows already perform build and live checks.
+# Avoid a redundant paid hosted-runner CI job for every merge; validate PRs.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch: {}
   pull_request:
     branches: [main]
 
