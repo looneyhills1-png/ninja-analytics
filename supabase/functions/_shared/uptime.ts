@@ -35,9 +35,9 @@ export function probeUrl(raw: string): URL | null {
     if (url.username || url.password) return null;
     // URL canonicalizes alternate IPv4 encodings. Deny all IP literals
     // (including bracketed IPv6) and non-default ports for public probes.
-    const host = url.hostname.toLowerCase().replace(/\\.$/, "");
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (!host.includes(".") || host.startsWith("[") ||
-        /^\\d+(?:\\.\\d+){3}$/.test(host) || url.port) return null;
+        /^\d+(?:\.\d+){3}$/.test(host) || url.port) return null;
     if (INTERNAL_SUFFIXES.some((suffix) =>
       host === suffix || host.endsWith(`.${suffix}`))) return null;
     if (host.split(".").some((label) =>
