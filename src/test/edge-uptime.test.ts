@@ -5,11 +5,11 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("public uptime URL validation", () => {
   it("accepts normal public sites", () => {
-    expect(probeUrl("https://www.example.com/path")?.hostname).toBe(
-      "www.example.com",
-    );
+    const site = probeUrl("https://www.example.com/path");
+    expect(site?.hostname).toBe("www.example.com");
     expect(probeUrl("http://example.org")?.hostname).toBe("example.org");
   });
+
   it.each([
     "http://localhost:1234/",
     "http://127.0.0.1/",
@@ -28,29 +28,29 @@ describe("public uptime URL validation", () => {
   ])("rejects non-public target %s", (url) => {
     expect(probeUrl(url)).toBeNull();
   });
+
   it("never fetches rejected destinations", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const result = await checkSiteUptime({
+    const site = {
       id: "site-1",
       website_url: "http://127.0.0.1/admin",
-    });
+    };
+    const result = await checkSiteUptime(site);
     expect(result.error).toBe("invalid_url");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
   it("never follows redirects", async () => {
-    const fetchMock = vi.fn(
-      async (_url: URL, _init?: RequestInit) =>
-        new Response(null, {
-          status: 302,
-          headers: { location: "http://127.0.0.1/admin" },
-        }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const result = await checkSiteUptime({
-      id: "site-1",
-      website_url: "https://example.com",
+    const fetchMock = vi.fn(async (_url: URL, _init?: RequestInit) => {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://127.0.0.1/admin" },
+      });
     });
+    vi.stubGlobal("fetch", fetchMock);
+    const site = { id: "site-1", website_url: "https://example.com" };
+    const result = await checkSiteUptime(site);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe("manual");
     expect(result.ok).toBe(false);

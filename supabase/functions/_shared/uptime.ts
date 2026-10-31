@@ -45,26 +45,16 @@ export function probeUrl(raw: string): URL | null {
     // URL canonicalizes alternate IPv4 encodings. Deny all IP literals
     // (including bracketed IPv6) and non-default ports for public probes.
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
-    if (
-      !host.includes(".") ||
-      host.startsWith("[") ||
-      /^\d+(?:\.\d+){3}$/.test(host) ||
-      url.port
-    ) {
+    if (!host.includes(".")) return null;
+    if (host.startsWith("[")) return null;
+    if (/^\d+(?:\.\d+){3}$/.test(host)) return null;
+    if (url.port) return null;
+    if (INTERNAL_SUFFIXES.includes(host)) return null;
+    if (INTERNAL_SUFFIXES.some((suffix) => host.endsWith(`.${suffix}`))) {
       return null;
     }
-    if (
-      INTERNAL_SUFFIXES.some(
-        (suffix) => host === suffix || host.endsWith(`.${suffix}`),
-      )
-    ) {
-      return null;
-    }
-    if (
-      host.split(".").some(
-        (label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label),
-      )
-    ) {
+    const validLabel = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    if (host.split(".").some((label) => !validLabel.test(label))) {
       return null;
     }
     return url;
@@ -105,8 +95,8 @@ export async function checkSiteUptime(
     await res.body?.cancel();
     // Never follow a redirect to an unchecked destination (including
     // localhost or metadata endpoints). Mark redirects as unavailable.
-    const redirectBlocked =
-      res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400);
+    const redirect = res.status >= 300 && res.status < 400;
+    const redirectBlocked = res.type === "opaqueredirect" || redirect;
     const healthy = !redirectBlocked && res.status >= 200 && res.status < 400;
     let error: string | null = null;
     if (redirectBlocked) {
