@@ -20,11 +20,28 @@ export interface UptimeCheckResult {
   error: string | null;
 }
 
+// Uptime is for public websites only. Block obvious internal destinations
+// before network I/O. DNS rebinding / private DNS resolution still require
+// an outbound network policy; hostname validation alone is not an SSRF boundary.
+const INTERNAL_SUFFIXES = [
+  "localhost", "local", "localdomain", "internal", "lan", "home",
+  "test", "invalid", "example", "onion", "arpa",
+];
+
 export function probeUrl(raw: string): URL | null {
   try {
     const url = new URL(raw);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
     if (url.username || url.password) return null;
+    // URL canonicalizes alternate IPv4 encodings. Deny all IP literals
+    // (including bracketed IPv6) and non-default ports for public probes.
+    const host = url.hostname.toLowerCase().replace(/\\.$/, "");
+    if (!host.includes(".") || host.startsWith("[") ||
+        /^\\d+(?:\\.\\d+){3}$/.test(host) || url.port) return null;
+    if (INTERNAL_SUFFIXES.some((suffix) =>
+      host === suffix || host.endsWith(`.${suffix}`))) return null;
+    if (host.split(".").some((label) =>
+      !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
     return url;
   } catch {
     return null;
@@ -54,20 +71,25 @@ export async function checkSiteUptime(
   try {
     const res = await fetch(url, {
       method: "GET",
-      redirect: "follow",
+      redirect: "manual",
       signal: controller.signal,
       headers: { "User-Agent": "site-analytics-uptime/1.0" },
     });
     const latency = Math.round(performance.now() - startedAt);
     // Drain (bounded) so the connection can be reused/closed cleanly.
     await res.body?.cancel();
+    // Never follow a redirect to an unchecked destination (including
+    // localhost or metadata endpoints). Mark redirects as unavailable.
+    const redirectBlocked = res.type === "opaqueredirect" ||
+      (res.status >= 300 && res.status < 400);
     return {
       site_id: site.id,
       checked_at: checkedAt,
-      ok: res.status < 400,
-      status_code: res.status,
+      ok: !redirectBlocked && res.status >= 200 && res.status < 400,
+      status_code: res.status || null,
       latency_ms: latency,
-      error: res.status < 400 ? null : `http_${res.status}`,
+      error: redirectBlocked ? "redirect_blocked" :
+        res.status >= 200 && res.status < 400 ? null : `http_${res.status}`,
     };
   } catch (err) {
     const aborted = (err as { name?: string })?.name === "AbortError";
