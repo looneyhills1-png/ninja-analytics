@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkSiteUptime, probeUrl } from "../../supabase/functions/_shared/uptime";
+import {
+  checkSiteUptime,
+  probeUrl,
+} from "../../supabase/functions/_shared/uptime";
 
 afterEach(() => vi.unstubAllGlobals());
 
