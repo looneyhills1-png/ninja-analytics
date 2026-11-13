@@ -16,6 +16,12 @@ const envSchema = z.object({
   // Your Supabase plan's database-size limit, in megabytes, used to draw the
   // usage gauge on the System page. Free = 500, Pro = 8192. Optional.
   VITE_DB_SIZE_LIMIT_MB: z.coerce.number().positive().default(500),
+  // "true" for a private self-hosted build served by scripts/serve-local.mjs:
+  // no login screen; the local server attaches admin access to /sb/* calls.
+  VITE_LOCAL_ACCESS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);

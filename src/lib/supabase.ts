@@ -8,13 +8,19 @@ import type { Database } from "@/types/database";
  * print them manually.
  */
 export const supabase = createClient<Database>(
-  env.VITE_SUPABASE_URL,
+  // Local access: same-origin proxy that holds the admin token server-side.
+  env.VITE_LOCAL_ACCESS
+    ? `${window.location.origin}/sb`
+    : env.VITE_SUPABASE_URL,
   env.VITE_SUPABASE_PUBLISHABLE_KEY,
   {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
+      persistSession: !env.VITE_LOCAL_ACCESS,
+      autoRefreshToken: !env.VITE_LOCAL_ACCESS,
+      detectSessionInUrl: !env.VITE_LOCAL_ACCESS,
     },
+    global: env.VITE_LOCAL_ACCESS
+      ? { headers: { "x-ninja-local": "1" } }
+      : undefined,
   },
 );
