@@ -22,6 +22,24 @@ deployed commit in `DEPLOYED_COMMIT.txt`, and registers the logon task
 The stack's `.env` must list the local origin in `ALLOWED_APP_ORIGIN` (Edge Function CORS) and
 `ADDITIONAL_REDIRECT_URLS` (Auth), then `docker compose up -d functions auth` to apply.
 
+## Access model (no login, this PC only)
+
+The build uses `VITE_LOCAL_ACCESS=true`: no login or MFA screen. `scripts/serve-local.mjs` proxies
+`/sb/rest/v1/*` and `/sb/functions/v1/*` to the gateway and attaches a 15-minute admin JWT minted from
+the stack's `JWT_SECRET` (`scripts/local-access.mjs`). The browser only holds the publishable key.
+RLS (including the `aal2` policies) and the Edge Function admin checks are unchanged.
+
+Protection is the network boundary, so every proxied request must have a loopback `Host`, be
+same-origin, carry `x-ninja-local: 1`, and have no Cloudflare/forwarding headers. Auth, storage,
+realtime and the Postgres meta API are not reachable through the proxy.
+
+**The public route must stay closed.** `volumes/api/envoy/lds.template.yaml` answers 401 to the
+`supabase.ninjatickets.com` host and to any request carrying `cf-ray`/`cf-connecting-ip`. If that block is
+ever removed, restore authentication (`VITE_LOCAL_ACCESS=false`) first.
+
+To go back to password login: rebuild without `VITE_LOCAL_ACCESS` and reset the admin password in the
+local database (`auth.users`) or via the Auth admin API with the service key.
+
 ## Backups and restore test
 
 `C:\Ninja\supabase\scripts\backup-ninja-analytics.ps1` (daily 02:00 task `NinjaAnalytics-DailyBackup`)
