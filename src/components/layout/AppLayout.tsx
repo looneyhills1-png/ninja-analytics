@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
+import { env } from "@/lib/env";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ExportAllDataButton } from "@/components/layout/ExportAllDataButton";
@@ -81,17 +82,21 @@ export function AppLayout() {
         </nav>
         <div className="mt-auto hidden border-t border-border p-3 md:block">
           <p className="truncate px-1 pb-2 text-xs text-muted-foreground">
-            {privacy.maskText(user?.email)}
+            {env.VITE_LOCAL_ACCESS
+              ? "Local access (this PC only)"
+              : privacy.maskText(user?.email)}
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start"
-            onClick={() => void signOut()}
-          >
-            <LogOut className="h-4 w-4" aria-hidden />
-            Sign out
-          </Button>
+          {!env.VITE_LOCAL_ACCESS && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => void signOut()}
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              Sign out
+            </Button>
+          )}
           <p className="px-1 pt-3 text-[10px] font-medium text-muted-foreground">
             Commit {APP_COMMIT}
           </p>

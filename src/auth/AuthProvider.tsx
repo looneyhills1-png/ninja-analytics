@@ -10,6 +10,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
+import { env } from "@/lib/env";
 
 export type AssuranceLevel = "aal1" | "aal2";
 
@@ -64,6 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus(next.status);
     };
 
+    // Local access: the local server supplies admin credentials, so there is
+    // no session or MFA step. Row-level security still decides what is shown;
+    // is_portfolio_admin confirms the server-side identity is the admin.
+    if (env.VITE_LOCAL_ACCESS) {
+      const { data: isAdmin, error } = await supabase.rpc("is_portfolio_admin");
+      apply({
+        status: error || !isAdmin ? "not-admin" : "ready",
+        session: null,
+        level: "aal2",
+      });
+      return;
+    }
+
     const {
       data: { session: current },
     } = await supabase.auth.getSession();
@@ -117,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [resolve]);
 
   const signOut = useCallback(async () => {
+    if (env.VITE_LOCAL_ACCESS) return; // nothing to sign out of
     await supabase.auth.signOut();
     queryClient.clear();
     // onAuthStateChange will fire, but set state eagerly for snappy UX.
