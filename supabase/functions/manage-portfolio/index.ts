@@ -368,6 +368,9 @@ Deno.serve(async (req) => {
         country: input.country,
         device: input.device,
         notes: input.notes,
+        collection_method: input.collectionMethod,
+        brand_mentioned: input.brandMentioned,
+        cited_urls: input.citedUrls,
       });
       if (error) throw error;
       return json(200, { ok: true }, cors);

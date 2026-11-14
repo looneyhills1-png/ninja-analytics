@@ -1594,6 +1594,14 @@ export interface AiObservationInput {
   country: string | null;
   device: "desktop" | "mobile" | null;
   notes: string | null;
+  /** All methods are manual; nothing queries an assistant automatically. */
+  collectionMethod?:
+    | "manual_chat_ui"
+    | "manual_search_ui"
+    | "webmaster_export"
+    | "other_manual";
+  brandMentioned?: boolean | null;
+  citedUrls?: string[];
 }
 
 /** Always inserts a new row - a manual test result is never overwritten. */

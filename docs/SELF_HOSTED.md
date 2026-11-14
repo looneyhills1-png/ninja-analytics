@@ -77,3 +77,20 @@ AI-readiness audit Mondays 05:00.
 - Every collector has a circuit breaker and a daily call quota in `collector_state`.
 - Google's Search Generative AI report and Bing's AI Performance report have no documented API;
   they are shown as unsupported / manual and nothing is fabricated.
+
+## Opportunity validation and workflow (migration 0025)
+
+Apply `supabase/migrations/0025_*.sql` (rollback: `supabase/rollback/0025_down.sql`, which collapses the six
+statuses back to four) and copy `validate-opportunities`, `build-opportunities` and the `_shared` files into
+`C:\Ninja\supabase\volumes\functions`.
+
+- **Workflow:** New → Validated → Approved → Implemented → Monitoring, plus Rejected. The database trigger
+  enforces the allowed moves and writes every change (who, when, why) to `opportunity_events`. Nothing is
+  deleted; the original finding and original priority stay on the row.
+- **Validation** (`validate-opportunities`, button on the Opportunities page; deterministic, no AI): fetches the
+  actual page on your own host (≤80 per run, 600 ms apart), strips site-wide boilerplate, matches keywords to pages
+  by slug or page content, checks first-party Google/Bing demand, and classifies each item as Fix now, Content
+  improvement, New content, Monitor or Reject. Each verdict is appended to `opportunity_reviews`.
+- **Approval is yours.** `Approved` only records your decision. Ninja Analytics never publishes or edits a website.
+- PostgREST caps every response at 1000 rows (`PGRST_DB_MAX_ROWS`); server code reads large tables with
+  `fetchAllRows` pagination.
