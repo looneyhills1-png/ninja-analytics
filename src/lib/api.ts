@@ -630,12 +630,22 @@ export async function saveSite(args: {
   action: "create" | "update";
   id?: string;
   values: SiteFormValues;
+  /** Per-provider switches; an id-less provider is always disabled. */
+  integrations?: { gsc: boolean; ga4: boolean; bing: boolean };
+  /** Acknowledge replacing a property that already has stored history. */
+  confirmPropertyChange?: boolean;
 }): Promise<Site> {
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     site: Site;
   }>("manage-sites", {
-    body: { action: args.action, id: args.id, site: args.values },
+    body: {
+      action: args.action,
+      id: args.id,
+      site: args.values,
+      integrations: args.integrations,
+      confirmPropertyChange: args.confirmPropertyChange,
+    },
   });
 
   if (error) {

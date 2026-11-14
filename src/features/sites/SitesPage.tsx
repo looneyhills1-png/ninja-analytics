@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useSites } from "@/lib/hooks";
+import type { SiteWithStatuses } from "@/lib/api";
 import { computeHealth } from "@/lib/health";
 import { SOURCES, SOURCE_SHORT } from "@/lib/sources";
 import { relativeTime } from "@/lib/dates";
@@ -18,6 +19,7 @@ export function SitesPage() {
   const privacy = usePrivacyMode();
   const { data: sites, isLoading, isError, refetch } = useSites();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<SiteWithStatuses | null>(null);
   const now = new Date();
 
   return (
@@ -61,51 +63,79 @@ export function SitesPage() {
       {sites && sites.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {sites.map((site) => (
-            <Link key={site.id} to={`/sites/${site.id}`} className="block">
-              <Card className="h-full transition-colors hover:border-primary/50">
-                <CardContent className="space-y-3 p-4">
-                  <div>
-                    <p className="font-medium">
-                      {privacy.maskText(site.name, `site:${site.id}:name`)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {privacy.maskText(site.domain, `site:${site.id}:domain`)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {SOURCES.map((source) => {
-                      const status = site.statuses.find(
-                        (s) => s.source === source,
-                      );
-                      if (!status) return null;
-                      const health = computeHealth(status, now);
-                      return (
-                        <div key={source} className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">
-                            {SOURCE_SHORT[source]}
-                          </span>
-                          <HealthBadge health={health} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Last success{" "}
-                    {privacy.enabled
-                      ? "********"
-                      : relativeTime(
-                          site.statuses
-                            .map((s) => s.last_success_at)
-                            .filter((d): d is string => !!d)
-                            .sort()
-                            .at(-1),
+            <div key={site.id} className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 top-2 z-10"
+                aria-label={`Edit ${site.name}`}
+                onClick={() => setEditing(site)}
+              >
+                <Pencil className="h-4 w-4" aria-hidden />
+                Edit
+              </Button>
+              <Link to={`/sites/${site.id}`} className="block">
+                <Card className="h-full transition-colors hover:border-primary/50">
+                  <CardContent className="space-y-3 p-4">
+                    <div>
+                      <p className="font-medium">
+                        {privacy.maskText(site.name, `site:${site.id}:name`)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {privacy.maskText(
+                          site.domain,
+                          `site:${site.id}:domain`,
                         )}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {SOURCES.map((source) => {
+                        const status = site.statuses.find(
+                          (s) => s.source === source,
+                        );
+                        if (!status) return null;
+                        const health = computeHealth(status, now);
+                        return (
+                          <div
+                            key={source}
+                            className="flex items-center gap-1.5"
+                          >
+                            <span className="text-xs text-muted-foreground">
+                              {SOURCE_SHORT[source]}
+                            </span>
+                            <HealthBadge health={health} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Last success{" "}
+                      {privacy.enabled
+                        ? "********"
+                        : relativeTime(
+                            site.statuses
+                              .map((s) => s.last_success_at)
+                              .filter((d): d is string => !!d)
+                              .sort()
+                              .at(-1),
+                          )}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
           ))}
         </div>
+      )}
+
+      {editing && (
+        <SiteFormDialog
+          key={editing.id}
+          mode="edit"
+          site={editing}
+          onClose={() => setEditing(null)}
+          onDeleted={() => setEditing(null)}
+        />
       )}
 
       {adding && (
