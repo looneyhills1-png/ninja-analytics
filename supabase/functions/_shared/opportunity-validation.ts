@@ -635,7 +635,33 @@ export function markDuplicates(
 // -- WW3-style: real questions against a guide -----------------------------------
 
 const REAL_Q =
-  /^(how|what|why|when|where|who|which|can|should|do|does|is|are|will)\b/;
+  /^(how|what|why|when|where|who|which|can|should|do|does|is|are|will)\b/i;
+
+// Quote-style, social-media and poll fragments that tools scrape alongside real
+// questions. They are not things a site visitor asks, so never recommend them.
+const NOISE =
+  /\blikes?\b.*\bcomments?\b|\bfollowers\b|\bsubscribe\b|[“”"#@]|\bon (january|february|march|april|may|june|july|august|september|october|november|december) \d/i;
+// Questions put TO the reader ("do you have enough water?") are engagement
+// prompts, not questions to answer.
+const ENGAGEMENT = /^(do|did|have|has|would|are|were) you\b/i;
+
+/** A suggested question worth answering: a real question, not the seed keyword
+ * with words glued on, a scraped caption, or a prompt aimed at the reader. */
+export function isWellFormedQuestion(
+  question: string,
+  keyword: string,
+): boolean {
+  const q = question.trim();
+  if (q.length < 15 || q.length > 160) return false;
+  if (!REAL_Q.test(q) || !q.endsWith("?")) return false;
+  if (tokens(q).length < 5) return false;
+  if (NOISE.test(q) || ENGAGEMENT.test(q)) return false;
+  const nq = norm(q);
+  const nk = norm(keyword);
+  // Templated: the whole keyword is embedded with extra words attached.
+  if (nk.length > 0 && nq !== nk && nq.includes(nk)) return false;
+  return true;
+}
 
 export function coverageOfQuestion(question: string, pageText: string): number {
   const want = tokens(question).filter((t) => !STOP.has(t));
@@ -660,8 +686,13 @@ export interface QuestionSetInput {
 export function reviewQuestionSet(input: QuestionSetInput): Verdict {
   const { keyword, questions, match, page } = input;
   const real = [
-    ...new Set(questions.map((q) => q.trim().toLowerCase())),
-  ].filter((q) => REAL_Q.test(q) && tokens(q).length >= 5);
+    ...new Map(
+      questions
+        .map((q) => q.trim())
+        .filter((q) => isWellFormedQuestion(q, keyword))
+        .map((q) => [norm(q), q] as const),
+    ).values(),
+  ];
   const evidence: Record<string, unknown> = {
     keyword,
     matchedUrl: match?.url ?? null,
@@ -709,7 +740,7 @@ export function reviewQuestionSet(input: QuestionSetInput): Verdict {
   return {
     classification: "content_improvement",
     reasoning: `${match.url} is healthy but ${uncovered.length} of ${real.length} well-formed questions on "${keyword}" are not answered in its text.`,
-    recommendedChange: `Add a short FAQ to ${match.url} answering, from verified sources:\n${top.map((q) => `- ${q}`).join("\n")}`,
+    recommendedChange: `Candidate questions for a short FAQ on ${match.url} (the closest existing page, ${Math.round(match.score * 100)}% topical match; pick a better page if one fits). These come from NEURONwriter's research and some may be off-topic: keep only those your visitors would ask, and answer from verified sources.\n${top.map((q) => `- ${q}`).join("\n")}`,
     changeType: "edit",
     priority: clamp(input.siteBase + Math.min(8, uncovered.length / 3)),
     evidence,

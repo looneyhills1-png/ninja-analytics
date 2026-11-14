@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isWellFormedQuestion,
   analyseQuestions,
   candidatePages,
   fuzzyEq,
@@ -286,9 +287,9 @@ describe("reviewQuestionSet (real questions)", () => {
     const v = reviewQuestionSet({
       keyword: "how much emergency water should i store for my family",
       questions: [
-        "how do i purify rainwater for drinking safely at home",
-        "how long does stored tap water stay safe to drink",
-        "what containers are safe for storing emergency water long term",
+        "how do i purify rainwater for drinking safely at home?",
+        "how long does stored tap water stay safe to drink?",
+        "what containers are safe for storing emergency water long term?",
         "water storage uk",
       ],
       match,
@@ -304,7 +305,7 @@ describe("reviewQuestionSet (real questions)", () => {
   it("rejects when the page already covers nearly everything", () => {
     const v = reviewQuestionSet({
       keyword: "k",
-      questions: ["how much water should i store per person per day"],
+      questions: ["how much water should i store per person per day?"],
       match,
       page: water,
       siteBase: 65,
@@ -512,5 +513,31 @@ describe("matching and boilerplate (regression: false 'already covered')", () =>
     });
     expect(v.classification).toBe("reject");
     expect(v.reasoning).toContain("generic");
+  });
+});
+
+describe("isWellFormedQuestion (data-quality filter)", () => {
+  const kw = "how much emergency water should i store for my family";
+  it("keeps genuine, answerable questions", () => {
+    for (const q of [
+      "Can you store tap water in plastic containers?",
+      "Can emergency water freeze, and does freezing damage the container?",
+      "Is 2 litres of water a day enough?",
+    ]) {
+      expect(isWellFormedQuestion(q, kw)).toBe(true);
+    }
+  });
+
+  it("drops the keyword with words glued on, captions and reader-directed prompts", () => {
+    for (const q of [
+      "should how much emergency water should i store for my family quotes",
+      "where how much emergency water should i store for my family of 4?",
+      '3 likes, 0 comments - apexshifthub on November 8, 2026: "How much emergency water does your family need?',
+      "Do you have enough stored water for emergencies?",
+      "Have you tried water purification tablets instead of bleach?",
+      "How much water?",
+    ]) {
+      expect(isWellFormedQuestion(q, kw)).toBe(false);
+    }
   });
 });
