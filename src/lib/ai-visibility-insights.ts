@@ -35,6 +35,9 @@ export interface AiVisibilityObservationRow {
   country: string | null;
   device: "desktop" | "mobile" | null;
   notes: string | null;
+  collectionMethod?: string;
+  brandMentioned?: boolean | null;
+  citedUrls?: string[];
 }
 
 export interface SourceCoverageStat {

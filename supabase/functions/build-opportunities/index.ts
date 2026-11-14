@@ -11,7 +11,7 @@ import {
   type Opportunity,
   type PageTrend,
 } from "../_shared/opportunities.ts";
-import { serveIntel } from "../_shared/intel-common.ts";
+import { fetchAllRows, serveIntel } from "../_shared/intel-common.ts";
 
 const DAY = 86_400_000;
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -58,16 +58,24 @@ serveIntel(async ({ admin, trigger }) => {
       const end = new Date(`${through}T00:00:00Z`);
       const midStart = isoDate(new Date(end.getTime() - 27 * DAY));
       const prevStart = isoDate(new Date(end.getTime() - 55 * DAY));
-      const { data: rows } = await admin
-        .from("search_page_daily")
-        .select("page, metric_date, clicks")
-        .eq("site_id", siteId)
-        .eq("engine", "google")
-        .gte("metric_date", prevStart)
-        .lte("metric_date", through)
-        .limit(50_000);
+      const rows = await fetchAllRows<{
+        page: string;
+        metric_date: string;
+        clicks: number;
+      }>((from, to) =>
+        admin
+          .from("search_page_daily")
+          .select("page, metric_date, clicks")
+          .eq("site_id", siteId)
+          .eq("engine", "google")
+          .gte("metric_date", prevStart)
+          .lte("metric_date", through)
+          .order("metric_date")
+          .order("page")
+          .range(from, to),
+      );
       const agg = new Map<string, PageTrend>();
-      for (const r of rows ?? []) {
+      for (const r of rows) {
         const t = agg.get(r.page) ?? {
           page: r.page,
           clicksRecent: 0,
@@ -127,60 +135,117 @@ serveIntel(async ({ admin, trigger }) => {
       ),
     );
 
-    if (opps.length) {
-      // The payload omits `status`, so a conflict keeps dismissed/done rows.
-      const { error: upErr } = await admin.from("opportunities").upsert(
-        opps.map((o) => ({
-          site_id: o.siteId,
-          dedupe_key: o.dedupeKey,
-          source: o.source,
-          kind: o.kind,
-          target_url: o.targetUrl,
-          title: o.title,
+    const nowIso = new Date().toISOString();
+    const { data: existing } = await admin
+      .from("opportunities")
+      .select("id, dedupe_key, status")
+      .eq("site_id", siteId);
+    const known = new Map(
+      (existing ?? []).map((r) => [r.dedupe_key as string, r]),
+    );
+
+    // New findings are inserted; existing rows only get their evidence
+    // refreshed, so a validated priority, classification or owner decision is
+    // never overwritten by the nightly rebuild.
+    const fresh = opps.filter((o) => !known.has(o.dedupeKey));
+    if (fresh.length) {
+      const { data: inserted, error: insErr } = await admin
+        .from("opportunities")
+        .insert(
+          fresh.map((o) => ({
+            site_id: o.siteId,
+            dedupe_key: o.dedupeKey,
+            source: o.source,
+            kind: o.kind,
+            target_url: o.targetUrl,
+            title: o.title,
+            problem: o.problem,
+            evidence: o.evidence,
+            evidence_at: o.evidenceAt,
+            proposal: o.proposal,
+            expected_impact: o.expectedImpact,
+            effort: o.effort,
+            priority: o.priority,
+            original_priority: o.priority,
+            requires_publish_approval: o.requiresPublishApproval,
+            last_seen_at: nowIso,
+          })),
+        )
+        .select("id");
+      if (insErr) throw insErr;
+      upserted += inserted?.length ?? 0;
+      if (inserted?.length) {
+        await admin.from("opportunity_events").insert(
+          inserted.map((r) => ({
+            opportunity_id: r.id,
+            actor: "system",
+            from_status: null,
+            to_status: "new",
+            note: "Created by the opportunities builder",
+          })),
+        );
+      }
+    }
+    for (const o of opps) {
+      const row = known.get(o.dedupeKey);
+      if (!row) continue;
+      await admin
+        .from("opportunities")
+        .update({
           problem: o.problem,
           evidence: o.evidence,
           evidence_at: o.evidenceAt,
-          proposal: o.proposal,
-          expected_impact: o.expectedImpact,
-          effort: o.effort,
-          priority: o.priority,
-          requires_publish_approval: o.requiresPublishApproval,
-          last_seen_at: new Date().toISOString(),
-        })),
-        { onConflict: "site_id,dedupe_key" },
-      );
-      if (upErr) throw upErr;
-      upserted += opps.length;
-      // A problem that came back reopens an auto-resolved row (never a
-      // dismissed or owner-completed one).
-      await admin
-        .from("opportunities")
-        .update({ status: "open" })
-        .eq("site_id", siteId)
-        .eq("status", "resolved")
-        .in(
-          "dedupe_key",
-          opps.map((o) => o.dedupeKey),
-        );
+          last_seen_at: nowIso,
+        })
+        .eq("id", row.id);
+      upserted += 1;
     }
 
-    // Close open rows this rebuild no longer produces (problem resolved).
+    // A problem that returns after being auto-resolved reopens as New. Only
+    // rows the builder itself moved to Monitoring are reopened.
+    const resolvedIds = opps
+      .map((o) => known.get(o.dedupeKey))
+      .filter((r) => r && r.status === "monitoring")
+      .map((r) => r!.id as string);
+    if (resolvedIds.length) {
+      const { data: evs } = await admin
+        .from("opportunity_events")
+        .select("opportunity_id, note, at")
+        .in("opportunity_id", resolvedIds)
+        .order("at", { ascending: false });
+      const latest = new Map<string, string>();
+      for (const e of evs ?? []) {
+        if (!latest.has(e.opportunity_id))
+          latest.set(e.opportunity_id, e.note ?? "");
+      }
+      for (const id of resolvedIds) {
+        if ((latest.get(id) ?? "").startsWith("Evidence no longer present")) {
+          await admin
+            .from("opportunities")
+            .update({
+              status: "new",
+              status_note: "Problem reappeared in the latest evidence",
+            })
+            .eq("id", id);
+        }
+      }
+    }
+
+    // Open items the builder no longer produces: the evidence is gone, so move
+    // them to Monitoring (reversible, recorded in the history).
     const keep = new Set(opps.map((o) => o.dedupeKey));
-    const { data: open } = await admin
-      .from("opportunities")
-      .select("id, dedupe_key")
-      .eq("site_id", siteId)
-      .eq("status", "open")
-      .in("source", ["gsc", "ai_readiness", "neuronwriter"]);
-    const stale = (open ?? [])
-      .filter((r) => !keep.has(r.dedupe_key))
-      .map((r) => r.id);
-    if (stale.length) {
+    const gone = (existing ?? []).filter(
+      (r) => ["new", "validated"].includes(r.status) && !keep.has(r.dedupe_key),
+    );
+    for (const r of gone) {
       await admin
         .from("opportunities")
-        .update({ status: "resolved" })
-        .in("id", stale);
-      closed += stale.length;
+        .update({
+          status: "monitoring",
+          status_note: "Evidence no longer present in the latest data",
+        })
+        .eq("id", r.id);
+      closed += 1;
     }
   }
   return { trigger, sites: sites?.length ?? 0, upserted, closed };

@@ -5,7 +5,14 @@ import { formatNumber } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAiReferrals, useCollectorStates, useRunIntel } from "./intel-api";
+import { Link } from "react-router-dom";
+import {
+  useAiReferrals,
+  useCollectorStates,
+  useLatestReadiness,
+  useNeuronAnalyses,
+  useRunIntel,
+} from "./intel-api";
 import { ProvenanceBadge } from "./Provenance";
 import type { AiVisibilityObservation } from "@/types/database";
 
@@ -19,6 +26,8 @@ export function AiSignalsTab({
 }) {
   const referrals = useAiReferrals(siteId, 28);
   const collectors = useCollectorStates();
+  const neuron = useNeuronAnalyses(siteId);
+  const readiness = useLatestReadiness(siteId);
   const sync = useRunIntel("ai-referrals-sync");
   const ga4State = (collectors.data ?? []).find(
     (c) => c.provider === "ga4-ai-referrals",
@@ -184,6 +193,127 @@ export function AiSignalsTab({
             </table>
           </Card>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">
+            AI crawler access and indexing readiness
+          </h2>
+          <ProvenanceBadge kind="verified" />
+        </div>
+        <Card className="space-y-1 p-4 text-sm">
+          {readiness.isLoading ? (
+            <Skeleton className="h-10" />
+          ) : !readiness.data?.run ? (
+            <p className="text-muted-foreground">
+              No audit has run for this site yet.{" "}
+              <Link className="text-primary hover:underline" to="/ai-readiness">
+                Run one on the AI Readiness page.
+              </Link>
+            </p>
+          ) : (
+            (() => {
+              const f = readiness.data.findings;
+              const crawlers = f.filter((x) =>
+                x.check_key.startsWith("crawler_"),
+              );
+              const search = crawlers.filter(
+                (x) => (x.evidence as { role?: string })?.role === "search",
+              );
+              const blockedSearch = search.filter(
+                (x) => x.severity === "error",
+              );
+              const issues = f.filter(
+                (x) =>
+                  !x.check_key.startsWith("crawler_") &&
+                  (x.severity === "error" || x.severity === "warning"),
+              );
+              return (
+                <>
+                  <p>
+                    {search.length - blockedSearch.length} of {search.length}{" "}
+                    search and answer crawlers can reach the site
+                    {blockedSearch.length > 0 && (
+                      <span className="text-critical">
+                        {" "}
+                        (blocked:{" "}
+                        {blockedSearch
+                          .map((x) =>
+                            String(
+                              (x.evidence as { crawler?: string })?.crawler,
+                            ),
+                          )
+                          .join(", ")}
+                        )
+                      </span>
+                    )}
+                    . {issues.length} indexing or technical issue(s) at warning
+                    or error level in the sampled pages.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Audited {relativeTime(readiness.data.run.started_at)} ·{" "}
+                    {readiness.data.run.pages_checked} pages · bounded checks of
+                    your own site, not a measure of citations.{" "}
+                    <Link
+                      className="text-primary hover:underline"
+                      to="/ai-readiness"
+                    >
+                      Details
+                    </Link>
+                  </p>
+                </>
+              );
+            })()
+          )}
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">
+            NEURONwriter content analyses
+          </h2>
+          <ProvenanceBadge kind="verified" />
+        </div>
+        <Card className="space-y-1 p-4 text-sm">
+          {neuron.isLoading ? (
+            <Skeleton className="h-10" />
+          ) : (neuron.data ?? []).length === 0 ? (
+            <p className="text-muted-foreground">
+              No existing NEURONwriter analyses are stored for this site.
+              NEURONwriter documents no AI Visibility API, so none of its AI
+              Visibility data is imported.
+            </p>
+          ) : (
+            <>
+              <p>
+                {neuron.data!.length} existing analyses with{" "}
+                {formatNumber(
+                  neuron.data!.reduce(
+                    (n, a) => n + ((a.questions as unknown[])?.length ?? 0),
+                    0,
+                  ),
+                )}{" "}
+                suggested questions, fetched read-only. These are content
+                research inputs, not AI citations or rankings.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Last fetched {relativeTime(neuron.data![0].fetched_at)} ·{" "}
+                <Link className="text-primary hover:underline" to="/content">
+                  Content Intelligence
+                </Link>{" "}
+                ·{" "}
+                <Link
+                  className="text-primary hover:underline"
+                  to="/opportunities"
+                >
+                  Validated opportunities
+                </Link>
+              </p>
+            </>
+          )}
+        </Card>
       </section>
 
       <section className="space-y-3">

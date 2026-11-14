@@ -419,6 +419,16 @@ export function parseRemoveAiPromptInput(
   return { ok: true, value: { id: b.id } };
 }
 
+/** How a sampled observation was collected. All are manual: there is no
+ * automated querying of any assistant. */
+export const OBSERVATION_METHODS = [
+  "manual_chat_ui",
+  "manual_search_ui",
+  "webmaster_export",
+  "other_manual",
+] as const;
+export type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
+
 export interface AiObservationInput {
   siteId: string;
   promptId: string | null;
@@ -430,6 +440,9 @@ export interface AiObservationInput {
   country: string | null;
   device: "desktop" | "mobile" | null;
   notes: string | null;
+  collectionMethod: ObservationMethod;
+  brandMentioned: boolean | null;
+  citedUrls: string[];
 }
 
 export function parseAiObservationInput(
@@ -480,6 +493,39 @@ export function parseAiObservationInput(
   const notes = optionalTrimmedString(b.notes, 500);
   if (!notes.ok) return { ok: false, error: `notes: ${notes.error}` };
 
+  const method =
+    b.collectionMethod === undefined ? "other_manual" : b.collectionMethod;
+  if (
+    typeof method !== "string" ||
+    !(OBSERVATION_METHODS as readonly string[]).includes(method)
+  ) {
+    return {
+      ok: false,
+      error: `collectionMethod must be one of ${OBSERVATION_METHODS.join(", ")}`,
+    };
+  }
+  if (b.brandMentioned != null && typeof b.brandMentioned !== "boolean") {
+    return { ok: false, error: "brandMentioned must be a boolean or null" };
+  }
+  const citedUrls: string[] = [];
+  if (b.citedUrls != null) {
+    if (!Array.isArray(b.citedUrls) || b.citedUrls.length > 10) {
+      return {
+        ok: false,
+        error: "citedUrls must be a list of at most 10 URLs",
+      };
+    }
+    for (const u of b.citedUrls) {
+      const parsedUrl = parseOptionalUrl(u);
+      if (!parsedUrl.ok) {
+        return { ok: false, error: `citedUrls: ${parsedUrl.error}` };
+      }
+      if (parsedUrl.value && !citedUrls.includes(parsedUrl.value)) {
+        citedUrls.push(parsedUrl.value);
+      }
+    }
+  }
+
   return {
     ok: true,
     value: {
@@ -488,11 +534,14 @@ export function parseAiObservationInput(
       promptText,
       source: b.source as AiVisibilitySource,
       isCited: (b.isCited as boolean | null) ?? null,
-      citedUrl: citedUrl.value,
+      citedUrl: citedUrl.value ?? citedUrls[0] ?? null,
       competitorDomain: competitorDomain.value,
       country: country.value,
       device: (b.device as "desktop" | "mobile" | null) ?? null,
       notes: notes.value,
+      collectionMethod: method as ObservationMethod,
+      brandMentioned: (b.brandMentioned as boolean | null) ?? null,
+      citedUrls,
     },
   };
 }

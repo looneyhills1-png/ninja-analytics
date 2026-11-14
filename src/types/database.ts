@@ -1156,9 +1156,31 @@ export interface Database {
           effort: "low" | "medium" | "high";
           priority: number;
           requires_publish_approval: boolean;
-          status: "open" | "dismissed" | "done" | "resolved";
+          status:
+            | "new"
+            | "validated"
+            | "approved"
+            | "implemented"
+            | "monitoring"
+            | "rejected";
           first_seen_at: string;
           last_seen_at: string;
+          classification:
+            | "fix_now"
+            | "content_improvement"
+            | "new_content"
+            | "monitor"
+            | "reject"
+            | null;
+          recommended_change: string | null;
+          change_type: "edit" | "new_page" | "technical" | null;
+          baseline: Json | null;
+          after_metrics: Json | null;
+          original_priority: number | null;
+          reviewed_at: string | null;
+          owner_note: string | null;
+          status_note: string | null;
+          status_changed_at: string;
         };
         Insert: {
           id?: string;
@@ -1183,12 +1205,92 @@ export interface Database {
           effort: "low" | "medium" | "high";
           priority: number;
           requires_publish_approval?: boolean;
-          status?: "open" | "dismissed" | "done" | "resolved";
+          status?:
+            | "new"
+            | "validated"
+            | "approved"
+            | "implemented"
+            | "monitoring"
+            | "rejected";
           first_seen_at?: string;
           last_seen_at?: string;
+          classification?:
+            | "fix_now"
+            | "content_improvement"
+            | "new_content"
+            | "monitor"
+            | "reject"
+            | null;
+          recommended_change?: string | null;
+          change_type?: "edit" | "new_page" | "technical" | null;
+          baseline?: Json | null;
+          after_metrics?: Json | null;
+          original_priority?: number | null;
+          reviewed_at?: string | null;
+          owner_note?: string | null;
+          status_note?: string | null;
+          status_changed_at?: string;
         };
         Update: Partial<
           Database["public"]["Tables"]["opportunities"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      opportunity_events: {
+        Row: {
+          id: string;
+          opportunity_id: string;
+          at: string;
+          actor: string;
+          from_status: string | null;
+          to_status: string;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          opportunity_id: string;
+          at?: string;
+          actor: string;
+          from_status?: string | null;
+          to_status: string;
+          note?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["opportunity_events"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      opportunity_reviews: {
+        Row: {
+          id: string;
+          opportunity_id: string;
+          reviewed_at: string;
+          rules_version: string;
+          classification:
+            | "fix_now"
+            | "content_improvement"
+            | "new_content"
+            | "monitor"
+            | "reject";
+          reasoning: string;
+          evidence: Json;
+        };
+        Insert: {
+          id?: string;
+          opportunity_id: string;
+          reviewed_at?: string;
+          rules_version: string;
+          classification:
+            | "fix_now"
+            | "content_improvement"
+            | "new_content"
+            | "monitor"
+            | "reject";
+          reasoning: string;
+          evidence?: Json;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["opportunity_reviews"]["Insert"]
         >;
         Relationships: [];
       };
@@ -1564,6 +1666,12 @@ export type AiReadinessFinding = Tables<"ai_readiness_findings">;
 export type OpportunityRow = Tables<"opportunities">;
 export type CollectorState = Tables<"collector_state">;
 export type SystemNotice = Tables<"system_notices">;
+export type OpportunityEvent = Tables<"opportunity_events">;
+export type OpportunityReview = Tables<"opportunity_reviews">;
+export type OpportunityStatus = OpportunityRow["status"];
+export type OpportunityClassification = NonNullable<
+  OpportunityRow["classification"]
+>;
 export type GscCoverageSnapshot = Tables<"gsc_coverage_snapshots">;
 export type UrlInspection = Tables<"url_inspections">;
 export type UrlInspectionHistory = Tables<"url_inspection_history">;

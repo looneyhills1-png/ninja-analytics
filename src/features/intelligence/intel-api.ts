@@ -7,7 +7,10 @@ import type {
   CollectorState,
   NeuronAnalysis,
   NeuronProject,
+  OpportunityEvent,
+  OpportunityReview,
   OpportunityRow,
+  OpportunityStatus,
 } from "@/types/database";
 
 const keys = {
@@ -25,7 +28,6 @@ export async function getOpportunities(): Promise<OpportunityRow[]> {
   const { data, error } = await supabase
     .from("opportunities")
     .select("*")
-    .eq("status", "open")
     .order("priority", { ascending: false })
     .limit(500);
   if (error) throw error;
@@ -134,7 +136,8 @@ export type IntelFunction =
   | "ai-readiness-audit"
   | "neuron-sync"
   | "build-opportunities"
-  | "ai-referrals-sync";
+  | "ai-referrals-sync"
+  | "validate-opportunities";
 
 export async function invokeIntel(
   name: IntelFunction,
@@ -190,13 +193,68 @@ export function useRunIntel(name: IntelFunction) {
   });
 }
 
-export function useSetOpportunityStatus() {
+export interface OpportunityHistory {
+  events: OpportunityEvent[];
+  reviews: OpportunityReview[];
+}
+
+export async function getOpportunityHistory(
+  id: string,
+): Promise<OpportunityHistory> {
+  const [events, reviews] = await Promise.all([
+    supabase
+      .from("opportunity_events")
+      .select("*")
+      .eq("opportunity_id", id)
+      .order("at", { ascending: true }),
+    supabase
+      .from("opportunity_reviews")
+      .select("*")
+      .eq("opportunity_id", id)
+      .order("reviewed_at", { ascending: true }),
+  ]);
+  if (events.error) throw events.error;
+  if (reviews.error) throw reviews.error;
+  return { events: events.data ?? [], reviews: reviews.data ?? [] };
+}
+
+export const useOpportunityHistory = (id: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ["intel", "opportunity-history", id],
+    queryFn: () => getOpportunityHistory(id),
+    enabled,
+  });
+
+/** Move an opportunity through the workflow. The database enforces the allowed
+ * transitions and records who, when and why in opportunity_events. */
+export function useTransitionOpportunity() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { id: string; status: "dismissed" | "done" }) => {
+    mutationFn: async (v: {
+      id: string;
+      status: OpportunityStatus;
+      note?: string;
+    }) => {
       const { error } = await supabase
         .from("opportunities")
-        .update({ status: v.status })
+        .update({ status: v.status, status_note: v.note?.trim() || null })
+        .eq("id", v.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.opportunities });
+      void qc.invalidateQueries({ queryKey: ["intel", "opportunity-history"] });
+    },
+  });
+}
+
+export function useSaveOwnerNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { id: string; note: string }) => {
+      const { error } = await supabase
+        .from("opportunities")
+        .update({ owner_note: v.note.trim() || null })
         .eq("id", v.id);
       if (error) throw error;
     },

@@ -29,6 +29,23 @@ import { formatCtr, formatNumber, formatPosition } from "@/lib/format";
 import { relativeTime } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
+type ObservationMethodValue =
+  | "manual_chat_ui"
+  | "manual_search_ui"
+  | "webmaster_export"
+  | "other_manual";
+
+/** Every method is manual; Ninja Analytics never queries an assistant. */
+const OBSERVATION_METHOD_OPTIONS: Array<{
+  value: ObservationMethodValue;
+  label: string;
+}> = [
+  { value: "manual_chat_ui", label: "Asked an assistant by hand" },
+  { value: "manual_search_ui", label: "Checked a search results page" },
+  { value: "webmaster_export", label: "From a webmaster portal export" },
+  { value: "other_manual", label: "Other manual check" },
+];
+
 const TABS = ["coverage", "signals", "prompts", "observations"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -90,6 +107,9 @@ export function AiVisibilityPage() {
         country: o.country,
         device: o.device,
         notes: o.notes,
+        collectionMethod: o.collection_method,
+        brandMentioned: o.brand_mentioned,
+        citedUrls: o.cited_urls,
       })),
     [observationsQuery.data],
   );
@@ -650,6 +670,10 @@ function ObservationsTab({
   const [source, setSource] = useState<AiVisibilitySource>("chatgpt");
   const [isCited, setIsCited] = useState<"" | "yes" | "no">("");
   const [citedUrl, setCitedUrl] = useState("");
+  const [citedUrlsText, setCitedUrlsText] = useState("");
+  const [brand, setBrand] = useState<"" | "yes" | "no">("");
+  const [method, setMethod] =
+    useState<ObservationMethodValue>("manual_chat_ui");
   const [notes, setNotes] = useState("");
 
   async function submit() {
@@ -664,12 +688,20 @@ function ObservationsTab({
       source,
       isCited: isCited === "" ? null : isCited === "yes",
       citedUrl: citedUrl.trim() || null,
+      citedUrls: citedUrlsText
+        .split(/\s+/)
+        .map((u) => u.trim())
+        .filter(Boolean),
+      brandMentioned: brand === "" ? null : brand === "yes",
+      collectionMethod: method,
       competitorDomain: null,
       country: null,
       device: null,
       notes: notes.trim() || null,
     });
     setFreeText("");
+    setCitedUrlsText("");
+    setBrand("");
     setCitedUrl("");
     setNotes("");
     setIsCited("");
@@ -731,6 +763,38 @@ function ObservationsTab({
               placeholder="Cited URL (optional)"
               className="h-9 w-56 rounded-md border border-border bg-card px-3 text-sm"
             />
+            <select
+              value={brand}
+              onChange={(e) => setBrand(e.target.value as "" | "yes" | "no")}
+              aria-label="Brand mentioned"
+              className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+            >
+              <option value="">Brand mentioned? Unknown</option>
+              <option value="yes">Brand mentioned: Yes</option>
+              <option value="no">Brand mentioned: No</option>
+            </select>
+            <select
+              value={method}
+              onChange={(e) =>
+                setMethod(e.target.value as ObservationMethodValue)
+              }
+              aria-label="Collection method"
+              className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+            >
+              {OBSERVATION_METHOD_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <textarea
+              value={citedUrlsText}
+              onChange={(e) => setCitedUrlsText(e.target.value)}
+              placeholder="All cited URLs, one per line (optional)"
+              aria-label="Cited URLs"
+              rows={2}
+              className="w-72 rounded-md border border-border bg-card px-3 py-1.5 text-sm"
+            />
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -768,7 +832,9 @@ function ObservationsTab({
                   <th className="px-3 py-2 font-medium">Prompt</th>
                   <th className="px-2 py-2 font-medium">Source</th>
                   <th className="px-2 py-2 font-medium">Cited?</th>
-                  <th className="px-2 py-2 font-medium">Cited URL</th>
+                  <th className="px-2 py-2 font-medium">Brand</th>
+                  <th className="px-2 py-2 font-medium">Method</th>
+                  <th className="px-2 py-2 font-medium">Cited URL(s)</th>
                   <th className="px-2 py-2 font-medium">When</th>
                 </tr>
               </thead>
@@ -797,10 +863,34 @@ function ObservationsTab({
                           <span className="text-critical">No</span>
                         )}
                       </td>
-                      <td className="max-w-[12rem] truncate px-2 py-2 text-xs text-muted-foreground">
-                        {o.citedUrl
-                          ? privacy.maskText(o.citedUrl, `ai-obs-url:${o.id}`)
-                          : "-"}
+                      <td className="px-2 py-2 text-xs">
+                        {o.brandMentioned == null
+                          ? "Unknown"
+                          : o.brandMentioned
+                            ? "Yes"
+                            : "No"}
+                      </td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground">
+                        {OBSERVATION_METHOD_OPTIONS.find(
+                          (m) => m.value === o.collectionMethod,
+                        )?.label ?? "Manual (older entry)"}
+                      </td>
+                      <td className="max-w-[16rem] px-2 py-2 text-xs text-muted-foreground">
+                        {(o.citedUrls?.length
+                          ? o.citedUrls
+                          : o.citedUrl
+                            ? [o.citedUrl]
+                            : []
+                        ).length === 0
+                          ? "-"
+                          : (o.citedUrls?.length
+                              ? o.citedUrls
+                              : [o.citedUrl as string]
+                            ).map((u) => (
+                              <span key={u} className="block truncate">
+                                {privacy.maskText(u, `ai-obs-url:${o.id}:${u}`)}
+                              </span>
+                            ))}
                       </td>
                       <td className="px-2 py-2 text-xs text-muted-foreground">
                         {relativeTime(o.observedAt)}

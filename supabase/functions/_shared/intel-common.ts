@@ -62,6 +62,26 @@ export function serveIntel(
   });
 }
 
+/** Read every row of a query. PostgREST silently caps a single response at
+ * PGRST_DB_MAX_ROWS (1000), so a bare .limit(50000) is not enough. */
+export async function fetchAllRows<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  size = 1000,
+  max = 200_000,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < max; from += size) {
+    const { data, error } = await page(from, from + size - 1);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < size) break;
+  }
+  return out;
+}
+
 export async function loadGuard(
   admin: SupabaseClient,
   provider: string,
