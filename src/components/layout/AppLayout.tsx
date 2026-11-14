@@ -35,7 +35,12 @@ const NAV = [
   { to: "/site-audit", label: "Site Audit", icon: Stethoscope, end: false },
   { to: "/indexing", label: "Indexing", icon: Radar, end: false },
   { to: "/ai-visibility", label: "AI Visibility", icon: Sparkles, end: false },
-  { to: "/ai-readiness", label: "AI Readiness", icon: ClipboardCheck, end: false },
+  {
+    to: "/ai-readiness",
+    label: "AI Readiness",
+    icon: ClipboardCheck,
+    end: false,
+  },
   { to: "/content", label: "Content", icon: FileText, end: false },
   { to: "/opportunities", label: "Opportunities", icon: Lightbulb, end: false },
   { to: "/sync-runs", label: "Sync history", icon: History, end: false },

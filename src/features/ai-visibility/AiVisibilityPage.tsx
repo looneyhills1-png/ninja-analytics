@@ -175,7 +175,10 @@ export function AiVisibilityPage() {
         />
       )}
       {tab === "signals" && (
-        <AiSignalsTab siteId={siteId} observations={observationsQuery.data ?? []} />
+        <AiSignalsTab
+          siteId={siteId}
+          observations={observationsQuery.data ?? []}
+        />
       )}
       {tab === "prompts" && (
         <PromptsTab

@@ -1137,7 +1137,13 @@ export interface Database {
           id: string;
           site_id: string;
           dedupe_key: string;
-          source: "gsc" | "bing" | "ga4" | "neuronwriter" | "ai_readiness" | "ai_visibility";
+          source:
+            | "gsc"
+            | "bing"
+            | "ga4"
+            | "neuronwriter"
+            | "ai_readiness"
+            | "ai_visibility";
           kind: string;
           target_url: string | null;
           title: string;
@@ -1158,7 +1164,13 @@ export interface Database {
           id?: string;
           site_id: string;
           dedupe_key: string;
-          source: "gsc" | "bing" | "ga4" | "neuronwriter" | "ai_readiness" | "ai_visibility";
+          source:
+            | "gsc"
+            | "bing"
+            | "ga4"
+            | "neuronwriter"
+            | "ai_readiness"
+            | "ai_visibility";
           kind: string;
           target_url?: string | null;
           title: string;
