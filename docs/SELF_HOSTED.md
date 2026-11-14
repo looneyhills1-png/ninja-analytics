@@ -57,3 +57,23 @@ consent screen in *Testing* status expires refresh tokens after 7 days. Re-mint 
 
 Delete the `NinjaAnalytics-LocalDashboard` task and `C:\Ninja\analytics-web`; the hosted frontend and
 the Supabase stack are unaffected by this change. The paused hosted project is kept as a cold source.
+
+## Content intelligence, AI readiness and opportunities (migration 0023)
+
+Apply `supabase/migrations/0023_*.sql` to the stack database (idempotent; rollback in
+`supabase/rollback/0023_down.sql`) and copy the new `supabase/functions` folders and
+`_shared` files into `C:\Ninja\supabase\volumes\functions`. Scheduled with pg_cron
+(`ninja-intel-*`): NEURONwriter 04:30, AI referrals 04:35, opportunities 04:45 daily and the
+AI-readiness audit Mondays 05:00.
+
+- **NEURONwriter** (`neuron-sync`) is read-only: `list-projects`, `list-queries`, `get-query`.
+  It never calls `new-query`. Set `NEURONWRITER_API_KEY` in the stack `.env` (Gold plan or
+  higher) and recreate the `functions` container; without a key the function reports
+  `api_key_not_configured` and does nothing.
+- **AI referrals** (`ai-referrals-sync`) reads GA4 `sessionSource` using the existing Google
+  grant, so it needs a valid `GOOGLE_REFRESH_TOKEN`.
+- **AI readiness** crawls only the site's own host: 15 pages per run, 600 ms between requests,
+  one retry, at most one run per 5 days when scheduled (10 minutes when manual).
+- Every collector has a circuit breaker and a daily call quota in `collector_state`.
+- Google's Search Generative AI report and Bing's AI Performance report have no documented API;
+  they are shown as unsupported / manual and nothing is fabricated.
