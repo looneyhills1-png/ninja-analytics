@@ -20,6 +20,7 @@ import {
   generatePromptSuggestions,
   type AiVisibilityObservationRow,
 } from "@/lib/ai-visibility-insights";
+import { AiSignalsTab } from "@/features/intelligence/AiSignalsTab";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,7 +29,7 @@ import { formatCtr, formatNumber, formatPosition } from "@/lib/format";
 import { relativeTime } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-const TABS = ["coverage", "prompts", "observations"] as const;
+const TABS = ["coverage", "signals", "prompts", "observations"] as const;
 type Tab = (typeof TABS)[number];
 
 /** AI-related search-appearance heuristic: Google hasn't published a fixed
@@ -172,6 +173,9 @@ export function AiVisibilityPage() {
           bingAi={bingAiQuery.data ?? { snapshot: null, pages: [] }}
           bingAiLoading={bingAiQuery.isLoading}
         />
+      )}
+      {tab === "signals" && (
+        <AiSignalsTab siteId={siteId} observations={observationsQuery.data ?? []} />
       )}
       {tab === "prompts" && (
         <PromptsTab

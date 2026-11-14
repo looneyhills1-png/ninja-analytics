@@ -38,6 +38,9 @@ import { CompetitorsLinksPage } from "@/features/competitors/CompetitorsLinksPag
 import { SiteAuditPage } from "@/features/site-audit/SiteAuditPage";
 import { IndexingPage } from "@/features/indexing/IndexingPage";
 import { AiVisibilityPage } from "@/features/ai-visibility/AiVisibilityPage";
+import { OpportunitiesPage } from "@/features/intelligence/OpportunitiesPage";
+import { AiReadinessPage } from "@/features/intelligence/AiReadinessPage";
+import { ContentIntelligencePage } from "@/features/intelligence/ContentIntelligencePage";
 import {
   DemoLayout,
   DemoOverviewPage,
@@ -139,6 +142,9 @@ export const router = createBrowserRouter(
             { path: "/site-audit", element: <SiteAuditPage /> },
             { path: "/indexing", element: <IndexingPage /> },
             { path: "/ai-visibility", element: <AiVisibilityPage /> },
+            { path: "/opportunities", element: <OpportunitiesPage /> },
+            { path: "/content", element: <ContentIntelligencePage /> },
+            { path: "/ai-readiness", element: <AiReadinessPage /> },
             { path: "/sync-runs", element: <SyncRunsPage /> },
             { path: "/system", element: <SystemPage /> },
             { path: "/settings/security", element: <SecuritySettingsPage /> },

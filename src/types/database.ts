@@ -895,6 +895,9 @@ export interface Database {
           country: string | null;
           device: RankDevice | null;
           notes: string | null;
+          collection_method: string;
+          brand_mentioned: boolean | null;
+          cited_urls: string[];
         };
         Insert: {
           id?: string;
@@ -909,6 +912,9 @@ export interface Database {
           country?: string | null;
           device?: RankDevice | null;
           notes?: string | null;
+          collection_method?: string;
+          brand_mentioned?: boolean | null;
+          cited_urls?: string[];
         };
         Update: Partial<
           Database["public"]["Tables"]["ai_visibility_observations"]["Insert"]
@@ -984,11 +990,201 @@ export interface Database {
           },
         ];
       };
+      collector_state: {
+        Row: {
+          provider: string;
+          consecutive_failures: number;
+          open_until: string | null;
+          last_attempt_at: string | null;
+          last_success_at: string | null;
+          last_error_code: string | null;
+          last_error_message: string | null;
+          calls_today: number;
+          calls_day: string;
+        };
+        Insert: {
+          provider: string;
+          consecutive_failures?: number;
+          open_until?: string | null;
+          last_attempt_at?: string | null;
+          last_success_at?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          calls_today?: number;
+          calls_day?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["collector_state"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      neuron_projects: {
+        Row: {
+          neuron_project_id: string;
+          name: string;
+          engine: string | null;
+          language: string | null;
+          site_id: string | null;
+          fetched_at: string;
+        };
+        Insert: {
+          neuron_project_id: string;
+          name: string;
+          engine?: string | null;
+          language?: string | null;
+          site_id?: string | null;
+          fetched_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["neuron_projects"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      neuron_analyses: {
+        Row: {
+          neuron_query_id: string;
+          neuron_project_id: string;
+          site_id: string | null;
+          keyword: string;
+          status: string;
+          source: string | null;
+          created_src: string | null;
+          updated_src: string | null;
+          content_score: number | null;
+          terms: Json | null;
+          questions: Json;
+          competitors: Json;
+          page_url: string | null;
+          fetched_at: string;
+        };
+        Insert: {
+          neuron_query_id: string;
+          neuron_project_id: string;
+          site_id?: string | null;
+          keyword: string;
+          status: string;
+          source?: string | null;
+          created_src?: string | null;
+          updated_src?: string | null;
+          content_score?: number | null;
+          terms?: Json | null;
+          questions?: Json;
+          competitors?: Json;
+          page_url?: string | null;
+          fetched_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["neuron_analyses"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      ai_readiness_runs: {
+        Row: {
+          id: string;
+          site_id: string;
+          trigger_type: "scheduled" | "manual";
+          started_at: string;
+          finished_at: string | null;
+          status: "running" | "success" | "partial" | "failed";
+          pages_checked: number;
+          error_code: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          trigger_type: "scheduled" | "manual";
+          started_at?: string;
+          finished_at?: string | null;
+          status?: "running" | "success" | "partial" | "failed";
+          pages_checked?: number;
+          error_code?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["ai_readiness_runs"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      ai_readiness_findings: {
+        Row: {
+          id: string;
+          run_id: string;
+          site_id: string;
+          check_key: string;
+          severity: "error" | "warning" | "notice" | "ok";
+          url: string | null;
+          message: string;
+          evidence: Json;
+          checked_at: string;
+        };
+        Insert: {
+          id?: string;
+          run_id: string;
+          site_id: string;
+          check_key: string;
+          severity: "error" | "warning" | "notice" | "ok";
+          url?: string | null;
+          message: string;
+          evidence?: Json;
+          checked_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["ai_readiness_findings"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      opportunities: {
+        Row: {
+          id: string;
+          site_id: string;
+          dedupe_key: string;
+          source: "gsc" | "bing" | "ga4" | "neuronwriter" | "ai_readiness" | "ai_visibility";
+          kind: string;
+          target_url: string | null;
+          title: string;
+          problem: string;
+          evidence: Json;
+          evidence_at: string;
+          proposal: string;
+          expected_impact: string;
+          impact_is_estimate: boolean;
+          effort: "low" | "medium" | "high";
+          priority: number;
+          requires_publish_approval: boolean;
+          status: "open" | "dismissed" | "done" | "resolved";
+          first_seen_at: string;
+          last_seen_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          dedupe_key: string;
+          source: "gsc" | "bing" | "ga4" | "neuronwriter" | "ai_readiness" | "ai_visibility";
+          kind: string;
+          target_url?: string | null;
+          title: string;
+          problem: string;
+          evidence?: Json;
+          evidence_at: string;
+          proposal: string;
+          expected_impact: string;
+          impact_is_estimate?: boolean;
+          effort: "low" | "medium" | "high";
+          priority: number;
+          requires_publish_approval?: boolean;
+          status?: "open" | "dismissed" | "done" | "resolved";
+          first_seen_at?: string;
+          last_seen_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["opportunities"]["Insert"]
+        >;
+        Relationships: [];
+      };
       ga4_breakdown_daily: {
         Row: {
           site_id: string;
           metric_date: string;
-          dimension: "country" | "page_title" | "channel";
+          dimension: "country" | "page_title" | "channel" | "ai_referrer";
           dimension_value: string;
           active_users: number | null;
           sessions: number | null;
@@ -998,7 +1194,7 @@ export interface Database {
         Insert: {
           site_id: string;
           metric_date: string;
-          dimension: "country" | "page_title" | "channel";
+          dimension: "country" | "page_title" | "channel" | "ai_referrer";
           dimension_value: string;
           active_users?: number | null;
           sessions?: number | null;
@@ -1325,6 +1521,12 @@ export type AiVisibilityPrompt = Tables<"ai_visibility_prompts">;
 export type AiVisibilityObservation = Tables<"ai_visibility_observations">;
 export type BingAiPerformanceSnapshot = Tables<"bing_ai_performance_snapshots">;
 export type BingAiCitedPage = Tables<"bing_ai_cited_pages">;
+export type NeuronProject = Tables<"neuron_projects">;
+export type NeuronAnalysis = Tables<"neuron_analyses">;
+export type AiReadinessRun = Tables<"ai_readiness_runs">;
+export type AiReadinessFinding = Tables<"ai_readiness_findings">;
+export type OpportunityRow = Tables<"opportunities">;
+export type CollectorState = Tables<"collector_state">;
 export type GscCoverageSnapshot = Tables<"gsc_coverage_snapshots">;
 export type UrlInspection = Tables<"url_inspections">;
 export type UrlInspectionHistory = Tables<"url_inspection_history">;
