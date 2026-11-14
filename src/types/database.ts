@@ -1192,6 +1192,30 @@ export interface Database {
         >;
         Relationships: [];
       };
+      system_notices: {
+        Row: {
+          key: string;
+          severity: "info" | "warning";
+          title: string;
+          body: string;
+          details: Json;
+          checked_at: string;
+          dismissed_at: string | null;
+        };
+        Insert: {
+          key: string;
+          severity: "info" | "warning";
+          title: string;
+          body: string;
+          details?: Json;
+          checked_at?: string;
+          dismissed_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["system_notices"]["Insert"]
+        >;
+        Relationships: [];
+      };
       ga4_breakdown_daily: {
         Row: {
           site_id: string;
@@ -1539,6 +1563,7 @@ export type AiReadinessRun = Tables<"ai_readiness_runs">;
 export type AiReadinessFinding = Tables<"ai_readiness_findings">;
 export type OpportunityRow = Tables<"opportunities">;
 export type CollectorState = Tables<"collector_state">;
+export type SystemNotice = Tables<"system_notices">;
 export type GscCoverageSnapshot = Tables<"gsc_coverage_snapshots">;
 export type UrlInspection = Tables<"url_inspections">;
 export type UrlInspectionHistory = Tables<"url_inspection_history">;

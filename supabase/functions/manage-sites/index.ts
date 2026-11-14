@@ -4,6 +4,13 @@ import { requireAdminMfa } from "../_shared/auth.ts";
 import { normalizeError } from "../_shared/errors.ts";
 import { parseSiteInput } from "../_shared/site-input.ts";
 import { isUuid } from "../_shared/validate.ts";
+import {
+  changedExistingProperties,
+  findDuplicateAssignment,
+  resolveEnabled,
+  validateIntegrations,
+  type IntegrationIds,
+} from "../_shared/site-integrations.ts";
 
 const SITE_COLUMNS =
   "id,name,domain,website_url,gsc_property,ga4_property_id,bing_site_url,is_active,created_at,updated_at";
@@ -62,6 +69,62 @@ Deno.serve(async (req) => {
       );
     }
     const input = parsed.value;
+    const ids: IntegrationIds = {
+      gsc_property: input.gsc_property,
+      ga4_property_id: input.ga4_property_id,
+      bing_site_url: input.bing_site_url,
+    };
+
+    // Each identifier must belong to this site's own host / be well formed.
+    const valid = validateIntegrations(ids, input.domain);
+    if (!valid.ok) {
+      return json(
+        400,
+        {
+          ok: false,
+          error: "validation_error",
+          field: valid.field,
+          message: valid.error,
+        },
+        cors,
+      );
+    }
+
+    // A property may only be assigned to one site.
+    const targetId = action === "update" ? body?.id : null;
+    const { data: others, error: othersError } = await admin
+      .from("sites")
+      .select("id,name,gsc_property,ga4_property_id,bing_site_url");
+    if (othersError) throw othersError;
+    const dup = findDuplicateAssignment(
+      ids,
+      (others ?? []).filter((o) => o.id !== targetId),
+    );
+    if (dup) {
+      return json(
+        409,
+        {
+          ok: false,
+          error: "property_in_use",
+          provider: dup.provider,
+          message: `That ${dup.provider.toUpperCase()} property is already assigned to ${dup.siteName}.`,
+        },
+        cors,
+      );
+    }
+    const requested = body?.integrations as
+      | Partial<Record<"gsc" | "ga4" | "bing", unknown>>
+      | undefined;
+    const enabled = resolveEnabled(ids, requested);
+    const applyEnabled = async (siteId: string) => {
+      for (const source of ["gsc", "ga4", "bing"] as const) {
+        await admin
+          .from("integration_status")
+          .update({ enabled: enabled[source] })
+          .eq("site_id", siteId)
+          .eq("source", source);
+      }
+    };
 
     if (action === "create") {
       const { data, error } = await admin
@@ -83,6 +146,7 @@ Deno.serve(async (req) => {
         }
         throw error;
       }
+      await applyEnabled(data.id);
       return json(200, { ok: true, site: data }, cors);
     }
 
@@ -98,6 +162,30 @@ Deno.serve(async (req) => {
         },
         cors,
       );
+    }
+
+    // Replacing a property that already has history would blend two
+    // properties' data under one site, so it needs explicit confirmation.
+    const { data: current } = await admin
+      .from("sites")
+      .select("gsc_property,ga4_property_id,bing_site_url")
+      .eq("id", id)
+      .maybeSingle();
+    if (current) {
+      const changed = changedExistingProperties(current as IntegrationIds, ids);
+      if (changed.length > 0 && body?.confirmPropertyChange !== true) {
+        return json(
+          409,
+          {
+            ok: false,
+            error: "property_change_requires_confirmation",
+            providers: changed,
+            message:
+              "Changing a property that already has stored history mixes the old and new data. Confirm to proceed.",
+          },
+          cors,
+        );
+      }
     }
 
     const { data, error } = await admin
@@ -122,19 +210,7 @@ Deno.serve(async (req) => {
     }
     if (!data) return json(404, { ok: false, error: "not_found" }, cors);
 
-    // Keep each integration enabled iff its provider id is configured.
-    const reconcile: Array<[string, boolean]> = [
-      ["gsc", input.gsc_property != null],
-      ["ga4", input.ga4_property_id != null],
-      ["bing", input.bing_site_url != null],
-    ];
-    for (const [source, enabled] of reconcile) {
-      await admin
-        .from("integration_status")
-        .update({ enabled })
-        .eq("site_id", id)
-        .eq("source", source);
-    }
+    await applyEnabled(id as string);
 
     return json(200, { ok: true, site: data }, cors);
   } catch (err) {

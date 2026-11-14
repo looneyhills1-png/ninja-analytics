@@ -33,7 +33,7 @@ function bingErrorCode(status: number, bodyText: string) {
  * envelope - Bing's legacy API can return HTTP 200 with an error embedded in
  * the body, and that must never be read as a legitimate empty result.
  */
-async function callBing(
+export async function callBing(
   endpoint: string,
   apiKey: string,
   params: Record<string, string> = {},

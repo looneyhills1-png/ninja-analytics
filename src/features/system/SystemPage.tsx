@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Database, Trash2 } from "lucide-react";
+import { Database, ExternalLink, KeyRound, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import {
+  computeOAuthNotice,
+  type OAuthNoticeDetails,
+} from "@/lib/oauth-notice";
 import { env } from "@/lib/env";
 import { useDbUsage, useRunCleanup } from "@/lib/hooks";
 import type { DbUsage } from "@/lib/api";
@@ -34,9 +40,102 @@ export function SystemPage() {
           Database usage and data retention.
         </p>
       </div>
+      <GoogleAccessNotice />
       <DatabaseUsageCard />
       <RetentionCard />
     </div>
+  );
+}
+
+/** Non-disruptive heads-up that Google credentials may expire in Testing mode. */
+function GoogleAccessNotice() {
+  const qc = useQueryClient();
+  const { data: notice } = useQuery({
+    queryKey: ["system-notice", "google_oauth_testing"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("system_notices")
+        .select("*")
+        .eq("key", "google_oauth_testing")
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const update = useMutation({
+    mutationFn: async (patch: {
+      dismissed_at?: string;
+      details?: Record<string, string>;
+    }) => {
+      const { error } = await supabase
+        .from("system_notices")
+        .update(patch)
+        .eq("key", "google_oauth_testing");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["system-notice"] });
+    },
+  });
+
+  if (!notice) return null;
+  const details = (notice.details ?? {}) as OAuthNoticeDetails;
+  const state = computeOAuthNotice(details, notice.dismissed_at, new Date());
+  if (!state.visible) return null;
+
+  return (
+    <Alert tone="info">
+      <div className="space-y-2">
+        <p className="flex items-center gap-2 font-medium">
+          <KeyRound className="h-4 w-4" aria-hidden />
+          {notice.title}
+          {state.daysLeft !== null && (
+            <span className="font-normal text-muted-foreground">
+              (about {state.daysLeft} day{state.daysLeft === 1 ? "" : "s"} left)
+            </span>
+          )}
+        </p>
+        <p className="text-sm text-muted-foreground">{notice.body}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            className="inline-flex items-center gap-1 text-sm text-primary underline-offset-2 hover:underline"
+            href="https://console.cloud.google.com/auth/audience"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open Google Auth Platform{" "}
+            <ExternalLink className="h-3 w-3" aria-hidden />
+          </a>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={update.isPending}
+            onClick={() =>
+              update.mutate({
+                details: {
+                  ...(details as Record<string, string>),
+                  publishing_status: "production",
+                },
+              })
+            }
+          >
+            I have published the app
+          </Button>
+          {!state.urgent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={update.isPending}
+              onClick={() =>
+                update.mutate({ dismissed_at: new Date().toISOString() })
+              }
+            >
+              Dismiss
+            </Button>
+          )}
+        </div>
+      </div>
+    </Alert>
   );
 }
 
