@@ -18,6 +18,7 @@ import { TopMovers } from "@/features/dashboard/TopMovers";
 import { ComparisonTable } from "@/features/dashboard/ComparisonTable";
 import { CoveragePanel } from "@/features/dashboard/CoveragePanel";
 import { RefreshQueue } from "@/features/dashboard/RefreshQueue";
+import { TopActions } from "@/features/dashboard/TopActions";
 import { BriefingCard } from "@/features/dashboard/BriefingCard";
 import { PortfolioTrajectorySection } from "@/features/dashboard/PortfolioTrajectorySection";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,8 @@ export function OverviewPage() {
         </div>
         <RangeSelector days={days} onChange={setDays} />
       </div>
+
+      <TopActions />
 
       {/* Data + insights (range-driven) */}
       {insights.isLoading ? (

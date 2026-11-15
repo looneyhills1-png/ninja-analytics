@@ -1,21 +1,7 @@
 import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Globe,
-  Search,
-  Swords,
-  Stethoscope,
-  Radar,
-  Sparkles,
-  ClipboardCheck,
-  FileText,
-  Lightbulb,
-  History,
-  Database,
-  ShieldCheck,
-  LogOut,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
+import { NAV_GROUPS } from "@/components/layout/nav";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { env } from "@/lib/env";
@@ -26,32 +12,6 @@ import { PrivacyModeToggle } from "@/components/layout/PrivacyModeToggle";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { APP_COMMIT } from "@/lib/build-info";
 import { usePrivacyMode } from "@/lib/privacy";
-
-const NAV = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/sites", label: "Sites", icon: Globe, end: false },
-  { to: "/keywords", label: "Keywords", icon: Search, end: false },
-  { to: "/competitors", label: "Competitors", icon: Swords, end: false },
-  { to: "/site-audit", label: "Site Audit", icon: Stethoscope, end: false },
-  { to: "/indexing", label: "Indexing", icon: Radar, end: false },
-  { to: "/ai-visibility", label: "AI Visibility", icon: Sparkles, end: false },
-  {
-    to: "/ai-readiness",
-    label: "AI Readiness",
-    icon: ClipboardCheck,
-    end: false,
-  },
-  { to: "/content", label: "Content", icon: FileText, end: false },
-  { to: "/opportunities", label: "Opportunities", icon: Lightbulb, end: false },
-  { to: "/sync-runs", label: "Sync history", icon: History, end: false },
-  { to: "/system", label: "System", icon: Database, end: false },
-  {
-    to: "/settings/security",
-    label: "Security",
-    icon: ShieldCheck,
-    end: false,
-  },
-];
 
 /**
  * Shell layout for authenticated pages. Auth/MFA gating is added in Phase 3;
@@ -69,23 +29,35 @@ export function AppLayout() {
           <span className="text-sm font-semibold">Site Analytics</span>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:gap-0.5 md:pb-4">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )
-              }
+          {NAV_GROUPS.map((group) => (
+            <div
+              key={group.title ?? "top"}
+              className="flex gap-1 md:flex-col md:gap-0.5"
             >
-              <Icon className="h-4 w-4" aria-hidden />
-              {label}
-            </NavLink>
+              {group.title && (
+                <p className="hidden px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground md:block">
+                  {group.title}
+                </p>
+              )}
+              {group.items.map(({ to, label, icon: Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end ?? false}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )
+                  }
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
           <ExportAllDataButton />
           <PrivacyModeToggle />

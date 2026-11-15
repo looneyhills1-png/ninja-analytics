@@ -394,3 +394,89 @@ ${internalLinkOpportunitiesSection(internalLinkSuggestions)}
 ${safetyRulesSection()}
 ${ctrOpportunity ? `\n## 8. CTR-specific rules\n${ctrSafetyRulesSection()}\n` : ""}`;
 }
+
+// ---------------------------------------------------------------------------
+// Fix prompt for a workflow opportunity (Fixes queue). Same modal, same rule
+// as the keyword Fix button above: this only builds text for the owner to
+// review and hand to an engineer or agent. It never edits, commits or
+// publishes anything, and states plainly whether the owner has approved the
+// change yet.
+// ---------------------------------------------------------------------------
+export interface OpportunityPromptInput {
+  siteName: string;
+  siteDomain: string;
+  status: string;
+  classification: string | null;
+  changeType: string | null;
+  targetUrl: string | null;
+  title: string;
+  problem: string;
+  recommendedChange: string | null;
+  proposal: string;
+  expectedImpact: string;
+  evidence: unknown;
+  baselineText: string | null;
+  requiresPublishApproval: boolean;
+  ownerNote: string | null;
+}
+
+const EVIDENCE_LIMIT = 1800;
+
+function evidenceBlock(evidence: unknown): string {
+  if (evidence == null) return "No structured evidence stored.";
+  let text: string;
+  try {
+    text = JSON.stringify(evidence, null, 2);
+  } catch {
+    return "Evidence could not be rendered.";
+  }
+  return text.length > EVIDENCE_LIMIT
+    ? `${text.slice(0, EVIDENCE_LIMIT)}\n... (truncated; full evidence is in Ninja Analytics)`
+    : text;
+}
+
+export function buildOpportunityFixPrompt(i: OpportunityPromptInput): string {
+  const approved = i.status === "approved" || i.status === "implemented";
+  const approval = !i.requiresPublishApproval
+    ? "No website publishing is involved in this item."
+    : approved
+      ? "The owner has APPROVED this change in Ninja Analytics. Still prepare it as a reviewable change (diff/preview) and report back; publish only through the site's normal deploy process."
+      : `The owner has NOT approved this change yet (status: ${i.status}). Prepare a proposed change for review only. Do not publish, deploy or edit the live site.`;
+  return `# ${i.siteName} fix prompt - ${i.title}
+
+## 1. Where
+- Website: ${i.siteName} (${i.siteDomain})
+- Exact URL: ${i.targetUrl ?? "no single URL - site-wide or several pages; inspect the evidence below to find them"}
+- Type of change: ${i.changeType ?? "not specified"}
+- Classification: ${i.classification ?? "not yet validated"}
+
+## 2. The problem (plain English)
+${i.problem}
+
+## 3. Evidence
+Collected by Ninja Analytics from first-party data (Search Console, GA4, Bing, the site's own crawl or NEURONwriter). It is a snapshot and may be stale.
+${evidenceBlock(i.evidence)}
+
+Baseline before any change: ${i.baselineText ?? "none recorded (no single target page)"}
+
+## 4. Recommended change
+${i.recommendedChange ?? i.proposal}
+
+Expected benefit (an estimate, not a promise): ${i.expectedImpact}
+${i.ownerNote ? `\nOwner note: ${i.ownerNote}\n` : ""}
+## 5. Approval and publishing
+${approval}
+
+## 6. Safety rules
+- Inspect the real page before changing anything; the evidence above is not a live fetch.
+- Make only evidence-based changes. Never invent facts, prices, dates, availability, quotes or statistics; mark anything unverifiable as unavailable.
+- Preserve working content, affiliate/CTA links and structured data. Do not create a competing duplicate page when the existing URL already matches the intent.
+- No keyword stuffing, no generic filler, no clickbait.
+- Do not touch unrelated pages or sites.
+- Run the site's own build/tests/quality gates before proposing the change.
+- Report: files changed, a summary of the diff, test/build result, and the URL to re-check.
+
+## 7. After the change
+Tell the owner so they can mark this item Implemented in Ninja Analytics. Ninja Analytics then compares the page's Search Console numbers with the baseline above (judged only after at least 14 days of data) and shows the measured result.
+`;
+}

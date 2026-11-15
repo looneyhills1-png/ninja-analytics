@@ -33,6 +33,8 @@ import {
   useTransitionOpportunity,
 } from "./intel-api";
 import { ProvenanceBadge, SitePicker } from "./Provenance";
+import { FixPromptModal } from "@/features/keywords/FixPromptModal";
+import { buildOpportunityFixPrompt } from "@/features/keywords/generateFixPrompt";
 
 const SOURCE_LABEL: Record<string, string> = {
   gsc: "Google Search Console",
@@ -69,8 +71,10 @@ export function OpportunitiesPage() {
     () => (sitesQuery.data ?? []).filter((s) => s.is_active),
     [sitesQuery.data],
   );
-  const siteName = (id: string) =>
-    sites.find((s) => s.id === id)?.name ?? "Unknown site";
+  const siteOf = (id: string) => {
+    const s = sites.find((x) => x.id === id);
+    return { name: s?.name ?? "Unknown site", domain: s?.domain ?? "" };
+  };
   const inSite = (oppsQuery.data ?? []).filter(
     (o) => !siteId || o.site_id === siteId,
   );
@@ -161,7 +165,7 @@ export function OpportunitiesPage() {
         <ul className="space-y-3">
           {rows.map((o) => (
             <li key={o.id}>
-              <OpportunityCard opp={o} site={siteName(o.site_id)} />
+              <OpportunityCard opp={o} site={siteOf(o.site_id)} />
             </li>
           ))}
         </ul>
@@ -170,8 +174,15 @@ export function OpportunitiesPage() {
   );
 }
 
-function OpportunityCard({ opp, site }: { opp: OpportunityRow; site: string }) {
+function OpportunityCard({
+  opp,
+  site,
+}: {
+  opp: OpportunityRow;
+  site: { name: string; domain: string };
+}) {
   const [open, setOpen] = useState(false);
+  const [showFix, setShowFix] = useState(false);
   const [note, setNote] = useState("");
   const transition = useTransitionOpportunity();
   const saveNote = useSaveOwnerNote();
@@ -180,6 +191,13 @@ function OpportunityCard({ opp, site }: { opp: OpportunityRow; site: string }) {
   const baseline = readSnapshot(opp.baseline);
   const after = readSnapshot(opp.after_metrics);
   const latestReview = history.data?.reviews.at(-1);
+  const outcome =
+    opp.after_metrics &&
+    typeof opp.after_metrics === "object" &&
+    "reason" in opp.after_metrics &&
+    typeof (opp.after_metrics as { reason?: unknown }).reason === "string"
+      ? (opp.after_metrics as { reason: string }).reason
+      : null;
   const wasPriority =
     opp.original_priority != null && opp.original_priority !== opp.priority
       ? opp.original_priority
@@ -190,7 +208,7 @@ function OpportunityCard({ opp, site }: { opp: OpportunityRow; site: string }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">
-            {site}
+            {site.name}
             {opp.target_url
               ? ` · ${opp.target_url}`
               : " · multiple or site-wide"}
@@ -265,6 +283,11 @@ function OpportunityCard({ opp, site }: { opp: OpportunityRow; site: string }) {
             {after && (
               <span className="block text-muted-foreground">
                 After: {describeSnapshot(after)}
+                {outcome && (
+                  <span className="block font-medium text-foreground">
+                    Result: {outcome}
+                  </span>
+                )}
               </span>
             )}
           </dd>
@@ -291,6 +314,14 @@ function OpportunityCard({ opp, site }: { opp: OpportunityRow; site: string }) {
           aria-label="Note for the history"
           className="h-8 min-w-[12rem] flex-1 rounded-md border border-border bg-card px-2 text-sm"
         />
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setShowFix(true)}
+          title="Generate a ready-to-use fix prompt for this item. Nothing is edited or published."
+        >
+          Fix
+        </Button>
         {TRANSITIONS[opp.status].map((to) => (
           <Button
             key={to}
@@ -310,6 +341,30 @@ function OpportunityCard({ opp, site }: { opp: OpportunityRow; site: string }) {
           </Button>
         ))}
       </div>
+
+      {showFix && (
+        <FixPromptModal
+          title={`${site.name} - ${opp.title}`}
+          prompt={buildOpportunityFixPrompt({
+            siteName: site.name,
+            siteDomain: site.domain,
+            status: opp.status,
+            classification: opp.classification,
+            changeType: opp.change_type,
+            targetUrl: opp.target_url,
+            title: opp.title,
+            problem: opp.problem,
+            recommendedChange: opp.recommended_change,
+            proposal: opp.proposal,
+            expectedImpact: opp.expected_impact,
+            evidence: opp.evidence,
+            baselineText: baseline ? describeSnapshot(baseline) : null,
+            requiresPublishApproval: opp.requires_publish_approval,
+            ownerNote: opp.owner_note,
+          })}
+          onClose={() => setShowFix(false)}
+        />
+      )}
 
       <button
         type="button"

@@ -12,6 +12,7 @@ import {
   type PageTrend,
 } from "../_shared/opportunities.ts";
 import { fetchAllRows, serveIntel } from "../_shared/intel-common.ts";
+import { judgeOutcome, type PageWindow } from "../_shared/outcome.ts";
 
 const DAY = 86_400_000;
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -248,5 +249,96 @@ serveIntel(async ({ admin, trigger }) => {
       closed += 1;
     }
   }
-  return { trigger, sites: sites?.length ?? 0, upserted, closed };
+
+  // Outcome measurement: for items the owner marked Implemented (now or
+  // earlier, possibly since moved to Monitoring), compare the page's current
+  // 28 days of Search Console data with the baseline captured before the
+  // change. Only the page's own first-party numbers; no AI, no estimates.
+  let measured = 0;
+  const measuredAt = new Date().toISOString();
+  const { data: impl } = await admin
+    .from("opportunities")
+    .select("id, site_id, baseline, after_metrics")
+    .in("status", ["implemented", "monitoring"])
+    .not("baseline", "is", null);
+  for (const o of impl ?? []) {
+    const base = o.baseline as (PageWindow & { url?: string }) | null;
+    if (!base?.url) continue;
+    const { data: evs } = await admin
+      .from("opportunity_events")
+      .select("at")
+      .eq("opportunity_id", o.id)
+      .eq("to_status", "implemented")
+      .order("at", { ascending: false })
+      .limit(1);
+    const changedAt = evs?.[0]?.at as string | undefined;
+    if (!changedAt) continue;
+    const { data: last } = await admin
+      .from("search_page_daily")
+      .select("metric_date")
+      .eq("site_id", o.site_id)
+      .eq("engine", "google")
+      .order("metric_date", { ascending: false })
+      .limit(1);
+    const through = last?.[0]?.metric_date as string | undefined;
+    if (!through) continue;
+    const start = isoDate(
+      new Date(new Date(`${through}T00:00:00Z`).getTime() - 27 * DAY),
+    );
+    const { data: rows } = await admin
+      .from("search_page_daily")
+      .select("clicks, impressions, average_position")
+      .eq("site_id", o.site_id)
+      .eq("engine", "google")
+      .eq("page", base.url)
+      .gte("metric_date", start)
+      .lte("metric_date", through)
+      .limit(500);
+    let clicks = 0;
+    let imps = 0;
+    let weighted = 0;
+    let w = 0;
+    for (const r of rows ?? []) {
+      const i = Number(r.impressions);
+      clicks += Number(r.clicks);
+      imps += i;
+      if (r.average_position != null && i > 0) {
+        weighted += Number(r.average_position) * i;
+        w += i;
+      }
+    }
+    const after: PageWindow = {
+      clicks,
+      impressions: imps,
+      position: w > 0 ? Math.round((weighted / w) * 10) / 10 : null,
+    };
+    // Days of data since the change, not wall-clock days: Search Console lags.
+    const days = Math.max(
+      0,
+      Math.floor(
+        (new Date(`${through}T00:00:00Z`).getTime() -
+          new Date(changedAt).getTime()) /
+          DAY,
+      ),
+    );
+    const verdict = judgeOutcome(base, after, days);
+    await admin
+      .from("opportunities")
+      .update({
+        after_metrics: {
+          capturedAt: measuredAt,
+          source: "gsc",
+          window: "last 28 days of data",
+          dataThrough: through,
+          url: base.url,
+          ...after,
+          verdict: verdict.verdict,
+          reason: verdict.reason,
+          daysSinceChange: days,
+        },
+      })
+      .eq("id", o.id);
+    measured += 1;
+  }
+  return { trigger, sites: sites?.length ?? 0, upserted, closed, measured };
 });
