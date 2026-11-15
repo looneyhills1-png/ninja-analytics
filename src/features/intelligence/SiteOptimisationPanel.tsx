@@ -59,10 +59,16 @@ export function SiteOptimisationPanel({
   siteId,
   siteName,
   siteDomain,
+  hostingPlatform = "unknown",
+  hostingProjectId = null,
+  publishing,
 }: {
   siteId: string;
   siteName: string;
   siteDomain: string;
+  hostingPlatform?: string;
+  hostingProjectId?: string | null;
+  publishing?: unknown;
 }) {
   const state = useOptimiseState(siteId);
   const [progress, setProgress] = useState("");
@@ -126,6 +132,11 @@ export function SiteOptimisationPanel({
               ? `Last analysed ${relativeTime(run.started_at)}.`
               : "Not analysed yet."}
           </p>
+          <HostingLine
+            platform={hostingPlatform}
+            projectId={hostingProjectId}
+            publishing={publishing}
+          />
         </div>
         <Button
           onClick={() => analyse.mutate(state.data)}
@@ -432,6 +443,13 @@ function ChangeRow({
       </div>
       <p className="mt-1">{c.problem}</p>
       <p className="text-muted-foreground">{c.recommendation}</p>
+      <ProposedChange c={c} />
+      {c.deployment === "blocked" && (
+        <p className="mt-1 text-xs font-medium text-warning">
+          {c.deployment_note ??
+            "Deployment BLOCKED: no authorised publishing interface."}
+        </p>
+      )}
     </li>
   );
 }
@@ -476,5 +494,100 @@ function AppliedRow({
         </p>
       )}
     </li>
+  );
+}
+
+const PLATFORM_NAME: Record<string, string> = {
+  chatgpt_sites: "ChatGPT Sites",
+  github_repo: "GitHub repository",
+  wordpress: "WordPress",
+  other: "Other platform",
+  unknown: "Not recorded",
+};
+
+function HostingLine({
+  platform,
+  projectId,
+  publishing,
+}: {
+  platform: string;
+  projectId: string | null;
+  publishing?: unknown;
+}) {
+  const p = (publishing ?? {}) as {
+    ninjaCanPublish?: boolean;
+    summary?: string;
+  };
+  return (
+    <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+      Hosted on {PLATFORM_NAME[platform] ?? platform}
+      {projectId ? ` (${projectId})` : ""}
+      {" · "}
+      {p.ninjaCanPublish
+        ? "Ninja Analytics can publish here"
+        : "Ninja Analytics cannot publish here"}
+      <HelpTip label="About publishing for this site">
+        {p.summary ??
+          "No publishing capability has been recorded for this site, so changes are recommendations only."}
+      </HelpTip>
+    </p>
+  );
+}
+
+interface PatchShape {
+  summary?: string;
+  totalLinks?: number;
+  pages?: Array<{ page: string; links: Array<{ from: string; to: string }> }>;
+}
+
+/** The exact change, kept so it can be applied elsewhere when this site cannot
+ * be published to from here. Copying it only writes to the clipboard. */
+function ProposedChange({ c }: { c: OptimisationChange }) {
+  const [copied, setCopied] = useState(false);
+  const patch = c.proposed_change as PatchShape | null;
+  if (!patch || typeof patch !== "object") return null;
+  const pages = patch.pages ?? [];
+  return (
+    <details className="mt-2 rounded-md border border-border p-2 text-xs">
+      <summary className="cursor-pointer font-medium">
+        Exact proposed change
+        {patch.totalLinks
+          ? ` (${patch.totalLinks} links on ${pages.length} pages)`
+          : ""}
+      </summary>
+      <p className="mt-1 text-muted-foreground">{patch.summary}</p>
+      <ul className="mt-1 max-h-48 space-y-1 overflow-y-auto">
+        {pages.map((p) => (
+          <li key={p.page}>
+            <span className="font-medium">{p.page}</span>
+            <ul className="pl-3 text-muted-foreground">
+              {p.links.map((l) => (
+                <li key={l.from}>
+                  {l.from} → {l.to}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="mt-2"
+        help="Copies the exact change as JSON to your clipboard so it can be applied in the site's own project. Nothing is sent or changed."
+        effect="read"
+        onClick={() => {
+          void navigator.clipboard
+            .writeText(JSON.stringify(patch, null, 2))
+            .then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            })
+            .catch(() => undefined);
+        }}
+      >
+        {copied ? "Copied!" : "Copy exact change"}
+      </Button>
+    </details>
   );
 }

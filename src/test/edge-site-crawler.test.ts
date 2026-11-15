@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeHealthScore,
+  isCanonicalisedElsewhere,
   extractPageData,
   isDisallowed,
   isLikelySitemapIndex,
@@ -206,5 +207,22 @@ describe("computeHealthScore", () => {
 
   it("never goes below 0", () => {
     expect(computeHealthScore(1000, 0, 0)).toBe(0);
+  });
+});
+
+describe("isCanonicalisedElsewhere", () => {
+  it("treats /page/index.html with a canonical to /page/ as a consolidated alias", () => {
+    expect(
+      isCanonicalisedElsewhere(
+        "https://ww3supply.com/blog/x/index.html",
+        "https://ww3supply.com/blog/x/",
+      ),
+    ).toBe(true);
+  });
+  it("does not exempt self-canonical pages or pages with no canonical", () => {
+    expect(
+      isCanonicalisedElsewhere("https://a.test/x/", "https://a.test/x/"),
+    ).toBe(false);
+    expect(isCanonicalisedElsewhere("https://a.test/x/", null)).toBe(false);
   });
 });

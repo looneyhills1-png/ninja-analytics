@@ -176,6 +176,55 @@ describe("SiteOptimisationPanel", () => {
     });
   });
 
+  it("shows the hosting platform and that Ninja Analytics cannot publish there", () => {
+    render(
+      <SiteOptimisationPanel
+        siteId="s1"
+        siteName="WW3supply"
+        siteDomain="ww3supply.com"
+        hostingPlatform="chatgpt_sites"
+        hostingProjectId="appgprj_6adaf6cd38dc8191ab79c1f60fb79ecf"
+        publishing={{ ninjaCanPublish: false, summary: "No interface." }}
+      />,
+    );
+    expect(screen.getByText(/Hosted on ChatGPT Sites/)).toBeTruthy();
+    expect(
+      screen.getByText(/appgprj_6adaf6cd38dc8191ab79c1f60fb79ecf/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Ninja Analytics cannot publish here/),
+    ).toBeTruthy();
+  });
+
+  it("shows BLOCKED deployment and preserves the exact proposed change", () => {
+    state.changes = [
+      change({
+        deployment: "blocked",
+        deployment_note:
+          "BLOCKED: this site is hosted on ChatGPT Sites. Nothing has been deployed.",
+        proposed_change: {
+          summary: "Use clean links.",
+          totalLinks: 1,
+          pages: [
+            {
+              page: "https://ww3supply.com/blog/",
+              links: [{ from: "x/index.html", to: "x/" }],
+            },
+          ],
+        },
+      }),
+    ];
+    renderPanel();
+    expect(
+      screen.getByText(/BLOCKED: this site is hosted on ChatGPT Sites/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Exact proposed change/)).toBeTruthy();
+    expect(screen.getByText(/x\/index.html → x\//)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy exact change" }),
+    ).toBeTruthy();
+  });
+
   it("says plainly when nothing has been applied", () => {
     renderPanel();
     expect(

@@ -30,7 +30,7 @@ serveIntel(async ({ admin, body }) => {
 
   const { data: site } = await admin
     .from("sites")
-    .select("id, name, domain")
+    .select("id, name, domain, hosting_platform, hosting_project_id")
     .eq("id", siteId)
     .maybeSingle();
   if (!site) throw new SyncError("validation_error", "site not found");
@@ -194,6 +194,10 @@ serveIntel(async ({ admin, body }) => {
     opportunities: opps ?? [],
     ctrCandidates,
     gscThrough: through,
+    hosting: {
+      platform: site.hosting_platform,
+      projectId: site.hosting_project_id,
+    },
   });
 
   const { data: run, error: runErr } = await admin
@@ -241,6 +245,8 @@ serveIntel(async ({ admin, body }) => {
       priority: item.priority,
       auto_eligible: item.autoEligible,
       status: item.status,
+      deployment: item.deployment,
+      deployment_note: item.deploymentNote,
       evidence: { ...item.evidence, key: item.key },
       updated_at: new Date().toISOString(),
     };
