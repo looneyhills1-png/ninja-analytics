@@ -18,6 +18,7 @@ import {
   useSetMode,
   type OptimiseMode,
 } from "./optimise-api";
+import { CoverageSection } from "./CoverageSection";
 
 const MODES: Array<{
   mode: OptimiseMode;
@@ -308,6 +309,8 @@ export function SiteOptimisationPanel({
           </p>
         )}
       </div>
+
+      <CoverageSection siteId={siteId} />
 
       <section>
         <h3 className="text-xs font-semibold text-muted-foreground">

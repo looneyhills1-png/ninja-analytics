@@ -21,6 +21,7 @@ import { CoveragePanel } from "@/features/dashboard/CoveragePanel";
 import { RefreshQueue } from "@/features/dashboard/RefreshQueue";
 import { useOpportunities } from "@/features/intelligence/intel-api";
 import { topActions } from "@/lib/top-actions";
+import { CoverageOverview } from "@/features/dashboard/CoverageOverview";
 import { TopActions } from "@/features/dashboard/TopActions";
 import { BriefingCard } from "@/features/dashboard/BriefingCard";
 import { PortfolioTrajectorySection } from "@/features/dashboard/PortfolioTrajectorySection";
@@ -54,6 +55,8 @@ export function OverviewPage() {
       </div>
 
       <TopActions />
+
+      <CoverageOverview />
 
       {/* Data + insights (range-driven) */}
       {insights.isLoading ? (

@@ -12,6 +12,10 @@ let state: {
   changes: OptimisationChange[];
 };
 
+vi.mock("@/features/intelligence/CoverageSection", () => ({
+  CoverageSection: () => null,
+}));
+
 vi.mock("@/features/intelligence/optimise-api", () => ({
   MAX_AUTO: 2,
   useOptimiseState: () => ({ isLoading: false, isError: false, data: state }),

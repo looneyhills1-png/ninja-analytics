@@ -17,6 +17,9 @@ import {
   type RejectedFix,
 } from "./fix-validation.ts";
 
+import type { Diagnosis } from "./coverage.ts";
+import type { QueryFinding } from "./query-intel.ts";
+
 export type OptimiseMode = "monitor" | "safe_auto" | "approval_required";
 
 export type ChangeClass =
@@ -139,6 +142,10 @@ export interface AssessInput {
   ctrCandidates: CtrCandidate[];
   gscThrough: string | null;
   hosting?: Hosting;
+  /** Per-URL diagnoses from the coverage inventory + Google inspections. */
+  diagnoses?: Diagnosis[];
+  /** Findings from the stored Search Console query data. */
+  queryFindings?: QueryFinding[];
 }
 
 export interface PlanItem {
@@ -432,6 +439,130 @@ export function assessSite(input: AssessInput): Assessment {
         ctr: c.impressions > 0 ? c.clicks / c.impressions : null,
         categories: ["high-impression-low-ctr"],
         source: "Google Search Console (28 days)",
+      },
+    });
+  }
+
+  // 4. URL coverage: what Google reports against what the live site does.
+  const cov = input.diagnoses ?? [];
+  const covGroups: Array<{
+    category: Diagnosis["category"];
+    only?: (d: Diagnosis) => boolean;
+    title: (n: number) => string;
+    cls: ChangeClass;
+    priority: (inSitemap: boolean) => number;
+  }> = [
+    {
+      category: "not_found",
+      title: (n) => `${n} page${n === 1 ? "" : "s"} return 404`,
+      cls: "redirect",
+      priority: (s) => (s ? 76 : 46),
+    },
+    {
+      category: "blocked",
+      title: (n) => `${n} page${n === 1 ? "" : "s"} refused our request`,
+      cls: "technical_fix",
+      priority: () => 70,
+    },
+    {
+      category: "content",
+      title: (n) =>
+        `${n} page${n === 1 ? " is" : "s are"} crawled by Google but not indexed`,
+      cls: "content_edit",
+      priority: () => 66,
+    },
+    {
+      category: "undiscovered",
+      title: (n) =>
+        `${n} live page${n === 1 ? " is" : "s are"} unknown to Google`,
+      cls: "internal_links",
+      priority: () => 62,
+    },
+    {
+      category: "waiting",
+      title: (n) =>
+        `${n} page${n === 1 ? " is" : "s are"} known to Google but not yet crawled`,
+      cls: "internal_links",
+      priority: () => 50,
+    },
+    {
+      category: "redirect",
+      only: (d) => d.evidence.some((e) => e === "Listed in the sitemap"),
+      title: (n) =>
+        `${n} sitemap entr${n === 1 ? "y" : "ies"} redirect elsewhere`,
+      cls: "technical_fix",
+      priority: () => 58,
+    },
+    {
+      category: "noindex",
+      only: (d) => d.evidence.some((e) => e === "Listed in the sitemap"),
+      title: (n) =>
+        `${n} sitemap entr${n === 1 ? "y is" : "ies are"} marked noindex`,
+      cls: "technical_fix",
+      priority: () => 55,
+    },
+  ];
+  for (const g of covGroups) {
+    const list = cov.filter(
+      (d) => d.category === g.category && (g.only ? g.only(d) : true),
+    );
+    if (list.length === 0) continue;
+    const inSitemap = list.some((d) =>
+      d.evidence.includes("Listed in the sitemap"),
+    );
+    raw.push({
+      key: `coverage:${g.category}`,
+      title: g.title(list.length),
+      problem: list[0].reason,
+      recommendation: list[0].action,
+      url: list.length === 1 ? list[0].url : null,
+      changeClass: g.cls,
+      risk: riskOf(g.cls),
+      priority: g.priority(inSitemap),
+      autoEligible: false,
+      status: "needs_approval",
+      evidence: {
+        source: "Google URL Inspection API + Ninja Analytics' own live check",
+        confidence: g.category === "blocked" ? "medium" : "high",
+        count: list.length,
+        urls: list.slice(0, 10).map((d) => d.url),
+        examples: list.slice(0, 3).map((d) => ({
+          url: d.url,
+          shouldBeIndexed: d.shouldBeIndexed,
+          evidence: d.evidence,
+        })),
+        needsApproval: list.some((d) => d.needsApproval),
+      },
+    });
+  }
+
+  // 5. Query intelligence from stored Search Console data.
+  const QCLASS: Record<QueryFinding["kind"], ChangeClass> = {
+    losing: "investigate",
+    low_ctr: "metadata_fix",
+    near_page_one: "content_edit",
+    cannibalisation: "content_edit",
+    question_gap: "content_edit",
+    intent_mismatch: "investigate",
+    device_gap: "investigate",
+  };
+  for (const f of input.queryFindings ?? []) {
+    const cls = QCLASS[f.kind];
+    raw.push({
+      key: `query:${f.key}`,
+      title: f.title,
+      problem: f.problem,
+      recommendation: f.recommendation,
+      url: f.url,
+      changeClass: cls,
+      risk: riskOf(cls),
+      priority: f.priority,
+      autoEligible: false,
+      status: "needs_approval",
+      evidence: {
+        ...f.evidence,
+        confidence: f.confidence,
+        findingKind: f.kind,
       },
     });
   }
