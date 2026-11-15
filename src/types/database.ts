@@ -68,6 +68,15 @@ export interface Database {
           ga4_property_id: string | null;
           bing_site_url: string | null;
           is_active: boolean;
+          /** Where the site is hosted (migration 0027); optional so older fixtures still type. */
+          hosting_platform?:
+            | "unknown"
+            | "chatgpt_sites"
+            | "github_repo"
+            | "wordpress"
+            | "other";
+          hosting_project_id?: string | null;
+          publishing?: Json;
           created_at: string;
           updated_at: string;
         };
@@ -1318,6 +1327,9 @@ export interface Database {
           rollback_sha: string | null;
           fix_run_id: string | null;
           note: string | null;
+          proposed_change: Json | null;
+          deployment: "not_applicable" | "blocked" | "deployed" | "verified";
+          deployment_note: string | null;
           created_at: string;
           updated_at: string;
         };

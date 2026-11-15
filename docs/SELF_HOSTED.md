@@ -123,3 +123,17 @@ statuses back to four) and copy `validate-opportunities`, `build-opportunities` 
 * **Help text**: every `Button` / `HelpButton` carries `help` (and `effect`:
   read, data, website). `src/test/controls-help.test.ts` fails if a control is
   added without it. `node scripts/audit-controls.mjs` lists them.
+
+## Hosting and publishing capability (migration 0027)
+
+* `sites.hosting_platform`, `hosting_project_id` and `publishing` record where a
+  site is hosted and what Ninja Analytics can actually publish to it. WW3Supply
+  is `chatgpt_sites` (project `appgprj_6adaf6cd38dc8191ab79c1f60fb79ecf`) with
+  `ninjaCanPublish: false`: no publishing interface to the Sites project is
+  configured, so every change for it is recorded with `deployment = 'blocked'`
+  and its exact patch in `optimisation_changes.proposed_change`. Nothing is
+  worked around. See `docs/proposed-changes/`.
+* Recommendations never assume WordPress, `.htaccess`, Apache or Nginx.
+* The site audit no longer counts a page whose canonical points at another URL
+  (for example `/page/index.html` -> `/page/`) as a duplicate.
+* Rollback: `supabase/rollback/0027_down.sql`.

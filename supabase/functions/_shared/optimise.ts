@@ -95,6 +95,36 @@ export interface CtrCandidate {
   clicks: number;
 }
 
+export interface Hosting {
+  platform: string;
+  projectId?: string | null;
+}
+
+export const PLATFORM_LABEL: Record<string, string> = {
+  chatgpt_sites: "ChatGPT Sites",
+  github_repo: "a GitHub repository",
+  wordpress: "WordPress",
+  other: "another platform",
+  unknown: "an unrecorded platform",
+};
+
+/** Deployment status for a plan item. A site hosted on ChatGPT Sites has no
+ * publishing interface that Ninja Analytics (or Claude Code) is authorised to
+ * use, so any change is preserved and marked blocked, never worked around. */
+export function deploymentFor(
+  hosting: Hosting | undefined,
+  autoEligible: boolean,
+): { deployment: "not_applicable" | "blocked"; note: string | null } {
+  if (autoEligible) return { deployment: "not_applicable", note: null };
+  if (hosting?.platform === "chatgpt_sites") {
+    return {
+      deployment: "blocked",
+      note: `BLOCKED: this site is hosted on ChatGPT Sites${hosting.projectId ? ` (project ${hosting.projectId})` : ""}. Ninja Analytics has no authorised publishing interface to it, so the change is kept here to be applied in the Sites project. Nothing has been deployed.`,
+    };
+  }
+  return { deployment: "not_applicable", note: null };
+}
+
 export interface AssessInput {
   site: { id: string; name: string; domain: string };
   mode: OptimiseMode;
@@ -108,6 +138,7 @@ export interface AssessInput {
   opportunities: OpportunityInput[];
   ctrCandidates: CtrCandidate[];
   gscThrough: string | null;
+  hosting?: Hosting;
 }
 
 export interface PlanItem {
@@ -125,6 +156,8 @@ export interface PlanItem {
   status: "proposed" | "needs_approval";
   opportunityId?: string;
   evidence: Record<string, unknown>;
+  deployment: "not_applicable" | "blocked";
+  deploymentNote: string | null;
 }
 
 export interface Assessment {
@@ -245,7 +278,7 @@ function route(mode: OptimiseMode, eligible: boolean): PlanItem["status"] {
 export function assessSite(input: AssessInput): Assessment {
   const { site, mode, now, audit } = input;
   const publisher = SUPPORTED_PUBLISHERS[site.domain.replace(/^www\./, "")];
-  const items: PlanItem[] = [];
+  const raw: Array<Omit<PlanItem, "deployment" | "deploymentNote">> = [];
 
   // 1. Technical findings from the site's own crawl, grouped by problem.
   const groups = new Map<string, AuditIssueInput[]>();
@@ -255,42 +288,53 @@ export function assessSite(input: AssessInput): Assessment {
     arr.push(i);
     groups.set(k, arr);
   }
-  // Duplicate title / description / content that comes from the same page
-  // being reachable at /page/ and /page/index.html is one root cause, not
-  // three problems: report it once with the fix that actually solves it.
-  const dupCodes = [
-    "duplicate_title",
-    "duplicate_meta_description",
-    "duplicate_content",
-  ];
-  const dupUrls = new Set<string>();
-  for (const c of dupCodes) {
-    for (const i of groups.get(c) ?? []) if (i.url) dupUrls.add(i.url);
+  // A page reachable at /page/index.html whose canonical already points at
+  // /page/ is a consolidated alias, not a competing duplicate. Search engines
+  // are told the clean address, so the real (low-urgency) job is making the
+  // site's own links use the clean address. Older audits also reported these
+  // as duplicate title / description / content; fold those into one item.
+  const aliasUrls = new Map<string, string>();
+  for (const i of groups.get("non_self_canonical") ?? []) {
+    if (!i.url || !i.url.endsWith("/index.html")) continue;
+    const clean = i.url.slice(0, -"index.html".length);
+    if (i.message.includes(clean)) aliasUrls.set(i.url, clean);
   }
-  const twoAddress = [...dupUrls].filter(
-    (u) =>
-      u.endsWith("/index.html") &&
-      dupUrls.has(u.slice(0, -"index.html".length)),
-  );
-  if (twoAddress.length > 0 && twoAddress.length * 2 >= dupUrls.size * 0.5) {
-    for (const c of dupCodes) groups.delete(c);
-    items.push({
-      key: "audit:duplicate_addresses",
-      title: `${twoAddress.length} pages are reachable at two addresses`,
-      problem: `The crawl found ${twoAddress.length} pages that load at both /page/ and /page/index.html, so search engines see duplicate titles, descriptions and content.`,
+  if (aliasUrls.size > 0) {
+    const involved = new Set<string>([
+      ...aliasUrls.keys(),
+      ...aliasUrls.values(),
+    ]);
+    for (const c of [
+      "non_self_canonical",
+      "duplicate_title",
+      "duplicate_meta_description",
+      "duplicate_content",
+    ]) {
+      const rest = (groups.get(c) ?? []).filter(
+        (i) => !i.url || !involved.has(i.url),
+      );
+      if (rest.length) groups.set(c, rest);
+      else groups.delete(c);
+    }
+    raw.push({
+      key: "audit:index_html_aliases",
+      title: `${aliasUrls.size} pages are also reachable at /page/index.html`,
+      problem:
+        "Each of these pages loads at both its clean address and an /index.html address. Both already declare the clean address as canonical, so search engines are told which to use. This is low urgency.",
       recommendation:
-        "Choose the clean address (/page/), redirect or canonicalise the /index.html version to it, and make sure the sitemap and internal links only use the clean address.",
+        "Make the site's own links use the clean addresses (for example /blog/page/ instead of /blog/page/index.html), including related-article links and the blog index. The canonical tags and the sitemap are already correct, so nothing else is needed.",
       url: null,
-      changeClass: "redirect",
-      risk: riskOf("redirect"),
-      priority: 85,
+      changeClass: "internal_links",
+      risk: riskOf("internal_links"),
+      priority: 40,
       autoEligible: false,
       status: "needs_approval",
       evidence: {
         source: "site audit",
-        severity: "warning",
-        count: twoAddress.length,
-        examples: twoAddress.slice(0, 6),
+        severity: "notice",
+        count: aliasUrls.size,
+        canonicalAlreadyCorrect: true,
+        examples: [...aliasUrls.keys()].slice(0, 6),
       },
     });
   }
@@ -307,7 +351,7 @@ export function assessSite(input: AssessInput): Assessment {
     const urls = [
       ...new Set(list.map((i) => i.url).filter(Boolean)),
     ] as string[];
-    items.push({
+    raw.push({
       key: `audit:${code}`,
       title: `${list.length} ${known?.what ?? code.replace(/_/g, " ")}`,
       problem: list[0].message,
@@ -344,7 +388,7 @@ export function assessSite(input: AssessInput): Assessment {
         : o.classification === "fix_now"
           ? "technical_fix"
           : "content_edit";
-    items.push({
+    raw.push({
       key: `opp:${o.id}`,
       title: o.title,
       problem: o.problem,
@@ -364,7 +408,7 @@ export function assessSite(input: AssessInput): Assessment {
   // change. Only offered for sites with an authorised publisher.
   for (const c of input.ctrCandidates) {
     const eligible = Boolean(publisher);
-    items.push({
+    raw.push({
       key: `ctr:${c.url}:${c.query}`,
       title: `Refresh the meta description for "${c.query}"`,
       problem: `Ranks around position ${c.currentPosition ?? "?"} with ${c.impressions} impressions but ${c.clicks} clicks.`,
@@ -392,6 +436,10 @@ export function assessSite(input: AssessInput): Assessment {
     });
   }
 
+  const items: PlanItem[] = raw.map((it) => {
+    const d = deploymentFor(input.hosting, it.autoEligible);
+    return { ...it, deployment: d.deployment, deploymentNote: d.note };
+  });
   items.sort((a, b) => b.priority - a.priority);
   // Each item gets exactly one status; recompute for allowlisted ones above.
   const auditAge = ageDays(audit?.finishedAt ?? null, now);

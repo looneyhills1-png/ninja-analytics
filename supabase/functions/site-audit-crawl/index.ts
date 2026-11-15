@@ -10,6 +10,7 @@ import { normalizeError, sanitizeMessage } from "../_shared/errors.ts";
 import { fetchWithRetry } from "../_shared/http.ts";
 import {
   computeHealthScore,
+  isCanonicalisedElsewhere,
   extractPageData,
   isDisallowed,
   isLikelySitemapIndex,
@@ -617,9 +618,11 @@ function computeIssues(
           message: `Title is ${d.title.length} characters (recommended 10-65).`,
         });
       }
-      const list = byTitle.get(d.title) ?? [];
-      list.push(p.url);
-      byTitle.set(d.title, list);
+      if (!isCanonicalisedElsewhere(p.url, d.canonicalUrl)) {
+        const list = byTitle.get(d.title) ?? [];
+        list.push(p.url);
+        byTitle.set(d.title, list);
+      }
     }
 
     if (!d.metaDescription) {
@@ -631,9 +634,11 @@ function computeIssues(
         message: "No meta description found.",
       });
     } else {
-      const list = byDescription.get(d.metaDescription) ?? [];
-      list.push(p.url);
-      byDescription.set(d.metaDescription, list);
+      if (!isCanonicalisedElsewhere(p.url, d.canonicalUrl)) {
+        const list = byDescription.get(d.metaDescription) ?? [];
+        list.push(p.url);
+        byDescription.set(d.metaDescription, list);
+      }
     }
 
     if (d.h1Count === 0) {
@@ -686,9 +691,11 @@ function computeIssues(
 
     if (d.hasSchema) schemaPages += 1;
 
-    const hashList = byContentHash.get(d.contentHash) ?? [];
-    hashList.push(p.url);
-    byContentHash.set(d.contentHash, hashList);
+    if (!isCanonicalisedElsewhere(p.url, d.canonicalUrl)) {
+      const hashList = byContentHash.get(d.contentHash) ?? [];
+      hashList.push(p.url);
+      byContentHash.set(d.contentHash, hashList);
+    }
 
     if (
       p.discoveredFrom === "sitemap" &&

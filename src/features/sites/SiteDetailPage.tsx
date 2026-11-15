@@ -157,6 +157,9 @@ export function SiteDetailPage() {
         siteId={site.id}
         siteName={site.name}
         siteDomain={site.domain}
+        hostingPlatform={site.hosting_platform}
+        hostingProjectId={site.hosting_project_id}
+        publishing={site.publishing}
       />
 
       {/* Integration health */}

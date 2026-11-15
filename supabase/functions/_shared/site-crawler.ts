@@ -273,3 +273,16 @@ export function computeHealthScore(
     notices * HEALTH_SCORE_WEIGHTS.notice;
   return Math.max(0, Math.min(100, Math.round(100 - deduction)));
 }
+
+/** A page whose canonical tag points at a different URL has told search
+ * engines which version to index, so it is a consolidated alias (for example
+ * /page/index.html -> /page/), not a competing duplicate. Duplicate title,
+ * description and content checks skip such pages. */
+export function isCanonicalisedElsewhere(
+  pageUrl: string,
+  canonicalUrl: string | null | undefined,
+): boolean {
+  if (!canonicalUrl) return false;
+  const norm = (u: string) => u.replace(/#.*$/, "");
+  return norm(canonicalUrl) !== norm(pageUrl);
+}
