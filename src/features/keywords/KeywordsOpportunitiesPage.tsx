@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { Wand2 } from "lucide-react";
@@ -191,7 +192,9 @@ export function KeywordsOpportunitiesPage() {
           <option value="clicksChange">Sort: Click change</option>
         </select>
         <div className="flex flex-wrap gap-1">
-          <button
+          <HelpButton
+            help="Shows every opportunity. Display only."
+            effect="read"
             type="button"
             onClick={() => setCategory(null)}
             className={cn(
@@ -202,12 +205,14 @@ export function KeywordsOpportunitiesPage() {
             )}
           >
             All ({rows.length})
-          </button>
+          </HelpButton>
           {CATEGORY_ORDER.map((c) => {
             const n = rows.filter((r) => r.categories.includes(c)).length;
             if (n === 0) return null;
             return (
-              <button
+              <HelpButton
+                help="Shows only opportunities of this type. Display only."
+                effect="read"
                 key={c}
                 type="button"
                 onClick={() => setCategory(c)}
@@ -219,7 +224,7 @@ export function KeywordsOpportunitiesPage() {
                 )}
               >
                 {CATEGORY_LABEL[c]} ({n})
-              </button>
+              </HelpButton>
             );
           })}
         </div>
@@ -309,18 +314,19 @@ export function KeywordsOpportunitiesPage() {
                           <ScoreBar score={row.score} />
                         </td>
                         <td className="px-2 py-2">
-                          <button
+                          <HelpButton
+                            help="Opens a ready-to-copy fix prompt for this query. It only writes text; nothing is edited or published."
+                            effect="read"
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setFixPromptRow(row);
                             }}
-                            title="Generate Fix Prompt"
                             className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
                           >
                             <Wand2 className="h-3 w-3" />
                             Fix
-                          </button>
+                          </HelpButton>
                         </td>
                       </tr>
                       {expanded === row.query && (
@@ -382,16 +388,18 @@ export function KeywordsOpportunitiesPage() {
                             />
                             <div className="mt-3 flex flex-col items-end gap-2">
                               <div className="flex gap-2">
-                                <button
+                                <HelpButton
+                                  help="Runs the automated Fix: it checks the real page, validates the change and, if it passes, commits a meta-description update to the site's repository (NinjaTickets only). The Fix runs table below records every step."
+                                  effect="website"
                                   type="button"
                                   disabled={
                                     !row.rankingUrl ||
                                     executeFixMutation.isPending
                                   }
-                                  title={
+                                  disabledReason={
                                     row.rankingUrl
-                                      ? "Run the automated Fix workflow (inspect, validate, edit, commit - see the Fix Runs audit trail below)"
-                                      : "No ranking URL on record for this query - nothing to fix"
+                                      ? "A Fix is already running."
+                                      : "No ranking URL on record for this query, so there is nothing to fix."
                                   }
                                   onClick={() => {
                                     if (!row.rankingUrl) return;
@@ -441,15 +449,17 @@ export function KeywordsOpportunitiesPage() {
                                   {executeFixMutation.isPending
                                     ? "Running Fix..."
                                     : "Run Fix"}
-                                </button>
-                                <button
+                                </HelpButton>
+                                <HelpButton
+                                  help="Opens a ready-to-copy fix prompt for this query. It only writes text; nothing is edited or published."
+                                  effect="read"
                                   type="button"
                                   onClick={() => setFixPromptRow(row)}
                                   className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
                                 >
                                   <Wand2 className="h-3 w-3" />
                                   Generate Fix Prompt
-                                </button>
+                                </HelpButton>
                               </div>
                               {fixResultByQuery[row.query] && (
                                 <div className="max-w-md text-right text-xs">

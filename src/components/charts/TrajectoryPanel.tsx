@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import type { TrajectoryMetricResult } from "@/lib/series";
@@ -64,7 +65,9 @@ export function TrajectoryPanel({
         <h2 className="text-sm font-semibold">{title}</h2>
         <div className="flex flex-wrap gap-1">
           {available.map((t) => (
-            <button
+            <HelpButton
+              help="Switches the chart to this measure. Display only."
+              effect="read"
               key={t.key}
               type="button"
               onClick={() => setSelectedKey(t.key)}
@@ -77,7 +80,7 @@ export function TrajectoryPanel({
               )}
             >
               {t.label}
-            </button>
+            </HelpButton>
           ))}
         </div>
       </div>

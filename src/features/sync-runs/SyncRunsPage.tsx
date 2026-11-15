@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useSites, useSyncRuns } from "@/lib/hooks";
@@ -168,13 +169,14 @@ function RunDetailPanel({
               {SOURCE_LABEL[run.source]} · {run.trigger_type}
             </p>
           </div>
-          <button
+          <HelpButton
+            help="Closes this panel."
             onClick={onClose}
             aria-label="Close"
             className="rounded-md p-1 text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
-          </button>
+          </HelpButton>
         </div>
 
         <div className="mt-4 space-y-2 text-sm">

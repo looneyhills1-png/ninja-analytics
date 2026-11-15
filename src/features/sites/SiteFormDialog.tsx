@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Loader2, Search, X } from "lucide-react";
@@ -276,13 +277,14 @@ export function SiteFormDialog({
           <h2 className="text-base font-semibold">
             {mode === "create" ? "Add a site" : "Edit site"}
           </h2>
-          <button
+          <HelpButton
+            help="Closes this window without saving."
             onClick={onClose}
             aria-label="Close"
             className="rounded-md p-1 text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
-          </button>
+          </HelpButton>
         </div>
 
         <form
@@ -345,6 +347,8 @@ export function SiteFormDialog({
           <div className="flex items-center justify-between gap-2 pt-1">
             <h3 className="text-sm font-medium">Integrations</h3>
             <Button
+              help="Looks up the Search Console, Analytics and Bing properties your connected accounts can see for this domain. Read-only; creates nothing."
+              effect="read"
               type="button"
               variant="secondary"
               size="sm"
@@ -433,6 +437,8 @@ export function SiteFormDialog({
                     aria-label={`${PROVIDER_LABEL[p]} identifier`}
                   />
                   <Button
+                    help="Makes one small read from this provider to prove the saved ID works. Read-only; changes nothing."
+                    effect="read"
                     type="button"
                     variant="secondary"
                     size="sm"
@@ -471,6 +477,8 @@ export function SiteFormDialog({
                     Delete site and all its data?
                   </span>
                   <Button
+                    help="Confirms deleting this site and all its collected data from Ninja Analytics. Your real website is not touched. Backups are not affected."
+                    effect="data"
                     type="button"
                     variant="danger"
                     size="sm"
@@ -480,6 +488,7 @@ export function SiteFormDialog({
                     Delete
                   </Button>
                   <Button
+                    help="Keeps the site. Nothing is deleted."
                     type="button"
                     variant="ghost"
                     size="sm"
@@ -490,6 +499,8 @@ export function SiteFormDialog({
                 </div>
               ) : (
                 <Button
+                  help="Starts deleting this site from Ninja Analytics. You will be asked to confirm. Your real website is not touched."
+                  effect="data"
                   type="button"
                   variant="ghost"
                   size="sm"
@@ -504,10 +515,17 @@ export function SiteFormDialog({
             )}
 
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={onClose}>
+              <Button
+                help="Closes this window. Anything already saved stays saved."
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+              >
                 {syncResults ? "Done" : "Cancel"}
               </Button>
               <Button
+                help="Saves these settings, then collects data once for each enabled source so you can see it work."
+                effect="data"
                 type="button"
                 variant="secondary"
                 disabled={busy}
@@ -515,7 +533,12 @@ export function SiteFormDialog({
               >
                 {syncing ? "Syncing…" : "Save & sync"}
               </Button>
-              <Button type="submit" loading={mutation.isPending && !syncing}>
+              <Button
+                help="Saves these website settings in Ninja Analytics."
+                effect="data"
+                type="submit"
+                loading={mutation.isPending && !syncing}
+              >
                 {mode === "create" ? "Add site" : "Save changes"}
               </Button>
             </div>

@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight } from "lucide-react";
@@ -18,6 +19,8 @@ import { TopMovers } from "@/features/dashboard/TopMovers";
 import { ComparisonTable } from "@/features/dashboard/ComparisonTable";
 import { CoveragePanel } from "@/features/dashboard/CoveragePanel";
 import { RefreshQueue } from "@/features/dashboard/RefreshQueue";
+import { useOpportunities } from "@/features/intelligence/intel-api";
+import { topActions } from "@/lib/top-actions";
 import { TopActions } from "@/features/dashboard/TopActions";
 import { BriefingCard } from "@/features/dashboard/BriefingCard";
 import { PortfolioTrajectorySection } from "@/features/dashboard/PortfolioTrajectorySection";
@@ -30,6 +33,8 @@ export function OverviewPage() {
   const privacy = usePrivacyMode();
   const [days, setDays] = useState<number>(30);
   const insights = useInsights(days);
+  const opps = useOpportunities();
+  const topActionTitles = topActions(opps.data ?? []).map((o) => o.title);
   const activeSiteIds = new Set(
     insights.data?.sitesWithStatuses
       .filter((s) => s.is_active)
@@ -105,7 +110,10 @@ export function OverviewPage() {
             )}
           />
 
-          <BriefingCard />
+          <BriefingCard
+            data={insights.data}
+            topActionTitles={topActionTitles}
+          />
 
           <div className="grid gap-3 lg:grid-cols-2">
             <InsightsFeed insights={insights.data.insights} />
@@ -247,7 +255,9 @@ function RangeSelector({
   return (
     <div className="inline-flex rounded-md border border-border p-0.5">
       {RANGES.map((r) => (
-        <button
+        <HelpButton
+          help="Changes the date range used by the numbers on this page. Display only."
+          effect="read"
           key={r}
           onClick={() => onChange(r)}
           className={cn(
@@ -258,7 +268,7 @@ function RangeSelector({
           )}
         >
           {r}d
-        </button>
+        </HelpButton>
       ))}
     </div>
   );

@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
@@ -86,7 +87,9 @@ export function RecordObservationForm({
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
       <div className="inline-flex rounded-md border border-border p-0.5">
         {(["quick", "serp"] as const).map((m) => (
-          <button
+          <HelpButton
+            help="Chooses how much detail to record for this check. Display only."
+            effect="read"
             key={m}
             type="button"
             onClick={() => setMode(m)}
@@ -98,7 +101,7 @@ export function RecordObservationForm({
             )}
           >
             {m === "quick" ? "Quick check" : "Full SERP"}
-          </button>
+          </HelpButton>
         ))}
       </div>
 
@@ -131,6 +134,8 @@ export function RecordObservationForm({
             </>
           )}
           <Button
+            help="Saves the ranking you observed. Stored as a manual observation."
+            effect="data"
             size="sm"
             loading={quickMutation.isPending}
             onClick={() => void submitQuick()}
@@ -176,7 +181,9 @@ export function RecordObservationForm({
                 />
                 ours
               </label>
-              <button
+              <HelpButton
+                help="Removes this row from the form before saving."
+                effect="read"
                 type="button"
                 aria-label="Remove row"
                 onClick={() =>
@@ -185,11 +192,13 @@ export function RecordObservationForm({
                 className="text-muted-foreground hover:text-critical"
               >
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </HelpButton>
             </div>
           ))}
           <div className="flex items-center gap-2">
             <Button
+              help="Adds another result row to the form."
+              effect="read"
               variant="secondary"
               size="sm"
               onClick={() =>
@@ -202,6 +211,8 @@ export function RecordObservationForm({
               <Plus className="h-3.5 w-3.5" /> Add row
             </Button>
             <Button
+              help="Saves the search results you observed. Stored as a manual observation."
+              effect="data"
               size="sm"
               loading={serpMutation.isPending}
               onClick={() => void submitSerp()}

@@ -1,3 +1,4 @@
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type ProvenanceKind =
@@ -53,16 +54,18 @@ export function ProvenanceBadge({
 }) {
   const s = STYLE[kind];
   return (
-    <span
-      title={s.hint}
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        s.cls,
-        className,
-      )}
-    >
-      {s.label}
-    </span>
+    <Tooltip content={s.hint}>
+      <span
+        tabIndex={0}
+        className={cn(
+          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+          s.cls,
+          className,
+        )}
+      >
+        {s.label}
+      </span>
+    </Tooltip>
   );
 }
 

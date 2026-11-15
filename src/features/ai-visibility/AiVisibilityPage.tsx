@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Info, Plus, Sparkles, Trash2 } from "lucide-react";
@@ -169,7 +170,9 @@ export function AiVisibilityPage() {
 
       <nav className="flex gap-1 border-b border-border">
         {TABS.map((t) => (
-          <button
+          <HelpButton
+            help="Shows this section of AI Visibility. Display only."
+            effect="read"
             key={t}
             type="button"
             onClick={() => setTab(t)}
@@ -181,7 +184,7 @@ export function AiVisibilityPage() {
             )}
           >
             {t}
-          </button>
+          </HelpButton>
         ))}
       </nav>
 
@@ -526,6 +529,8 @@ function PromptsTab({
             className="h-9 w-72 rounded-md border border-border bg-card px-3 text-sm"
           />
           <Button
+            help="Saves this suggested prompt as one you track. No AI service is asked anything."
+            effect="data"
             size="sm"
             loading={addMutation.isPending}
             onClick={() => void handleAdd()}
@@ -533,6 +538,8 @@ function PromptsTab({
             <Plus className="h-3.5 w-3.5" /> Add as observed
           </Button>
           <Button
+            help="Suggests prompts from your own top search queries. They are labelled as generated, never as real user prompts. No AI service is asked anything."
+            effect="data"
             variant="secondary"
             size="sm"
             onClick={() => setShowSuggestions((s) => !s)}
@@ -557,7 +564,9 @@ function PromptsTab({
             ) : (
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s) => (
-                  <button
+                  <HelpButton
+                    help="Adds this suggestion to your tracked prompts."
+                    effect="data"
                     key={s.promptText}
                     type="button"
                     onClick={() =>
@@ -572,7 +581,7 @@ function PromptsTab({
                   >
                     <Plus className="h-3 w-3" />
                     {privacyMask(s.promptText, `ai-suggest:${s.promptText}`)}
-                  </button>
+                  </HelpButton>
                 ))}
               </div>
             )}
@@ -630,7 +639,9 @@ function PromptsTab({
                       {lastObservedAt ? relativeTime(lastObservedAt) : "Never"}
                     </td>
                     <td className="px-2 py-2 text-right">
-                      <button
+                      <HelpButton
+                        help="Deletes this tracked prompt from Ninja Analytics. Your website is not affected."
+                        effect="data"
                         type="button"
                         aria-label="Remove prompt"
                         onClick={() =>
@@ -639,7 +650,7 @@ function PromptsTab({
                         className="text-muted-foreground hover:text-critical"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      </HelpButton>
                     </td>
                   </tr>
                 ))}
@@ -802,6 +813,8 @@ function ObservationsTab({
               className="h-9 w-56 rounded-md border border-border bg-card px-3 text-sm"
             />
             <Button
+              help="Records the manual check you just did. Stored as a manual observation, never as measured data."
+              effect="data"
               size="sm"
               loading={recordMutation.isPending}
               onClick={() => void submit()}

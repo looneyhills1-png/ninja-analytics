@@ -48,6 +48,8 @@ export function ContentIntelligencePage() {
         <div className="flex items-center gap-2">
           <SitePicker sites={sites} value={siteId} onChange={setPicked} />
           <Button
+            help="Downloads your existing NEURONwriter analyses and saves them here. It never creates new analyses, so it spends no credits."
+            effect="data"
             variant="secondary"
             size="sm"
             disabled={sync.isPending}

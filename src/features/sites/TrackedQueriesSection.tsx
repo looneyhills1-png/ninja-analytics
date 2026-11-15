@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo } from "react";
 import { Star, X } from "lucide-react";
 import { useTrackedQueryHistory, useTrackQuery } from "@/lib/hooks";
@@ -94,7 +95,9 @@ export function TrackedQueriesSection({
               }}
             />
             {privacy.enabled ? `Query ${i + 1}` : t.query}
-            <button
+            <HelpButton
+              help="Stops tracking this query."
+              effect="data"
               type="button"
               aria-label={`Stop tracking ${t.query}`}
               className="text-muted-foreground hover:text-critical"
@@ -104,7 +107,7 @@ export function TrackedQueriesSection({
               }
             >
               <X className="h-3 w-3" aria-hidden />
-            </button>
+            </HelpButton>
           </span>
         ))}
       </div>

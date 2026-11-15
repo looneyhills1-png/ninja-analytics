@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { NAV_GROUPS } from "@/components/layout/nav";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { env } from "@/lib/env";
@@ -39,23 +40,24 @@ export function AppLayout() {
                   {group.title}
                 </p>
               )}
-              {group.items.map(({ to, label, icon: Icon, end }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end ?? false}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )
-                  }
-                >
-                  <Icon className="h-4 w-4" aria-hidden />
-                  {label}
-                </NavLink>
+              {group.items.map(({ to, label, icon: Icon, end, help }) => (
+                <Tooltip key={to} content={help} className="md:w-full">
+                  <NavLink
+                    to={to}
+                    end={end ?? false}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex w-full items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )
+                    }
+                  >
+                    <Icon className="h-4 w-4" aria-hidden />
+                    {label}
+                  </NavLink>
+                </Tooltip>
               ))}
             </div>
           ))}
@@ -71,6 +73,7 @@ export function AppLayout() {
           </p>
           {!env.VITE_LOCAL_ACCESS && (
             <Button
+              help="Signs you out of this browser session."
               variant="ghost"
               size="sm"
               className="w-full justify-start"

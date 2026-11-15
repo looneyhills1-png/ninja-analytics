@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useState } from "react";
 import { ChevronDown, Download, FileJson, Table } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -188,7 +189,10 @@ export function ExportAllDataButton() {
 
   return (
     <div className="flex flex-col gap-1">
-      <button
+      <HelpButton
+        help="Opens the download options for a full copy of your data. Nothing is changed or sent anywhere."
+        effect="read"
+        block
         type="button"
         disabled={exporting}
         aria-expanded={open}
@@ -205,7 +209,7 @@ export function ExportAllDataButton() {
         )}
         {exporting ? "Exporting data" : "Export all data"}
         {!exporting && <ChevronDown className="ml-auto h-3.5 w-3.5" />}
-      </button>
+      </HelpButton>
       {open && (
         <div className="space-y-1 rounded-md border border-border bg-background p-1 shadow-sm">
           <FormatButton
@@ -243,7 +247,9 @@ function FormatButton({
   onClick: () => void;
 }) {
   return (
-    <button
+    <HelpButton
+      help="Downloads this export to your computer. Nothing is changed or sent anywhere."
+      effect="read"
       type="button"
       disabled={loading}
       onClick={onClick}
@@ -254,6 +260,6 @@ function FormatButton({
         <span className="block font-medium text-foreground">{label}</span>
         <span>{description}</span>
       </span>
-    </button>
+    </HelpButton>
   );
 }

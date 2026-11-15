@@ -107,6 +107,8 @@ export function SecuritySettingsPage() {
                           : "Remove?"}
                       </span>
                       <Button
+                        help="Confirms removing this authenticator. You will no longer be able to sign in with it."
+                        effect="data"
                         size="sm"
                         variant="danger"
                         onClick={() => void onRemove(factor.id)}
@@ -114,6 +116,7 @@ export function SecuritySettingsPage() {
                         Confirm
                       </Button>
                       <Button
+                        help="Keeps this authenticator. Nothing changes."
                         size="sm"
                         variant="ghost"
                         onClick={() => setConfirmRemove(null)}
@@ -123,6 +126,8 @@ export function SecuritySettingsPage() {
                     </div>
                   ) : (
                     <Button
+                      help="Starts removing this authenticator. You will be asked to confirm first."
+                      effect="data"
                       size="sm"
                       variant="secondary"
                       onClick={() => setConfirmRemove(factor.id)}
@@ -139,7 +144,11 @@ export function SecuritySettingsPage() {
         </CardContent>
       </Card>
 
-      <Button variant="secondary" onClick={() => void signOut()}>
+      <Button
+        help="Signs you out of this browser session."
+        variant="secondary"
+        onClick={() => void signOut()}
+      >
         Sign out
       </Button>
     </div>
@@ -224,7 +233,14 @@ function AddAuthenticator({ onAdded }: { onAdded: () => Promise<void> }) {
 
   if (!enroll) {
     return (
-      <Button size="sm" variant="secondary" loading={busy} onClick={start}>
+      <Button
+        help="Starts adding another authenticator app as a backup way to sign in."
+        effect="data"
+        size="sm"
+        variant="secondary"
+        loading={busy}
+        onClick={start}
+      >
         Add another authenticator
       </Button>
     );
@@ -267,10 +283,17 @@ function AddAuthenticator({ onAdded }: { onAdded: () => Promise<void> }) {
         />
       </div>
       <div className="flex gap-2">
-        <Button size="sm" type="submit" loading={busy}>
+        <Button
+          help="Checks the code and finishes adding this authenticator."
+          effect="data"
+          size="sm"
+          type="submit"
+          loading={busy}
+        >
           Verify
         </Button>
         <Button
+          help="Stops adding an authenticator. Nothing is saved."
           size="sm"
           type="button"
           variant="ghost"

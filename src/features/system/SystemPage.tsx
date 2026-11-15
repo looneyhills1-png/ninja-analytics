@@ -107,6 +107,8 @@ function GoogleAccessNotice() {
             <ExternalLink className="h-3 w-3" aria-hidden />
           </a>
           <Button
+            help="Tells Ninja Analytics you have set the Google app to In production so this warning goes away. It does not change anything at Google."
+            effect="data"
             variant="ghost"
             size="sm"
             disabled={update.isPending}
@@ -123,6 +125,7 @@ function GoogleAccessNotice() {
           </Button>
           {!state.urgent && (
             <Button
+              help="Hides this notice for now."
               variant="ghost"
               size="sm"
               disabled={update.isPending}
@@ -344,6 +347,8 @@ function RetentionCard() {
 
         <div className="flex items-center justify-end gap-2">
           <Button
+            help="Shows what the cleanup would remove without deleting anything. Read-only."
+            effect="read"
             variant="secondary"
             size="sm"
             loading={cleanup.isPending && cleanup.variables === true}
@@ -357,6 +362,8 @@ function RetentionCard() {
                 Permanently delete old rows?
               </span>
               <Button
+                help="Runs the cleanup now: permanently removes collected rows older than the retention window. Backups are not affected."
+                effect="data"
                 variant="danger"
                 size="sm"
                 loading={cleanup.isPending && cleanup.variables === false}
@@ -365,6 +372,7 @@ function RetentionCard() {
                 Confirm
               </Button>
               <Button
+                help="Cancels. Nothing is deleted."
                 variant="ghost"
                 size="sm"
                 onClick={() => setConfirming(false)}
@@ -374,6 +382,8 @@ function RetentionCard() {
             </div>
           ) : (
             <Button
+              help="Starts the cleanup of old collected data. You will be asked to confirm first."
+              effect="data"
               variant="danger"
               size="sm"
               onClick={() => setConfirming(true)}

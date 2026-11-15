@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { EyeOff } from "lucide-react";
 import { usePrivacyMode } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
@@ -6,7 +7,10 @@ export function PrivacyModeToggle() {
   const privacy = usePrivacyMode();
 
   return (
-    <button
+    <HelpButton
+      help="Hides names and numbers on screen, for example while sharing your screen. Display only; your data is unchanged."
+      effect="read"
+      block
       type="button"
       aria-pressed={privacy.enabled}
       onClick={privacy.toggle}
@@ -18,6 +22,6 @@ export function PrivacyModeToggle() {
       <EyeOff className="h-4 w-4" aria-hidden />
       Hide all data
       {privacy.enabled && <span className="ml-auto text-xs">On</span>}
-    </button>
+    </HelpButton>
   );
 }

@@ -31,7 +31,12 @@ export function SitesPage() {
             Every managed website and its integration health.
           </p>
         </div>
-        <Button size="sm" onClick={() => setAdding(true)}>
+        <Button
+          help="Adds a website for Ninja Analytics to monitor. Saved here only."
+          effect="data"
+          size="sm"
+          onClick={() => setAdding(true)}
+        >
           <Plus className="h-4 w-4" aria-hidden />
           Add site
         </Button>
@@ -52,7 +57,12 @@ export function SitesPage() {
           title="No websites yet"
           description="Add your first site to start tracking its metrics."
           action={
-            <Button size="sm" onClick={() => setAdding(true)}>
+            <Button
+              help="Adds a website for Ninja Analytics to monitor. Saved here only."
+              effect="data"
+              size="sm"
+              onClick={() => setAdding(true)}
+            >
               <Plus className="h-4 w-4" aria-hidden />
               Add site
             </Button>
@@ -65,6 +75,8 @@ export function SitesPage() {
           {sites.map((site) => (
             <div key={site.id} className="relative">
               <Button
+                help="Edits this site's name, domain and connected Google and Bing accounts."
+                effect="data"
                 variant="ghost"
                 size="sm"
                 className="absolute right-2 top-2 z-10"

@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import {
   ChevronDown,
@@ -138,7 +139,9 @@ export function OpportunitiesPage() {
         aria-label="Workflow status"
       >
         {STATUS_ORDER.map((s) => (
-          <button
+          <HelpButton
+            help="Shows the items in this step of the workflow. Display only."
+            effect="read"
             key={s}
             type="button"
             onClick={() => setStatus(s)}
@@ -150,7 +153,7 @@ export function OpportunitiesPage() {
             )}
           >
             {STATUS_LABEL[s]} <span className="text-xs">({counts[s]})</span>
-          </button>
+          </HelpButton>
         ))}
       </nav>
 
@@ -324,6 +327,8 @@ function OpportunityCard({
         </Button>
         {TRANSITIONS[opp.status].map((to) => (
           <Button
+            help={`${actionLabel(opp.status, to)}: records this decision and its note in the history. It never changes your website.`}
+            effect="data"
             key={to}
             size="sm"
             variant={
@@ -366,7 +371,9 @@ function OpportunityCard({
         />
       )}
 
-      <button
+      <HelpButton
+        help="Shows or hides how this item was checked and its full history."
+        effect="read"
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1 text-xs font-medium text-primary"
@@ -378,7 +385,7 @@ function OpportunityCard({
           <ChevronRight className="h-3 w-3" />
         )}
         Review reasoning and history
-      </button>
+      </HelpButton>
 
       {open && (
         <div className="space-y-3 rounded-md border border-border p-3 text-sm">

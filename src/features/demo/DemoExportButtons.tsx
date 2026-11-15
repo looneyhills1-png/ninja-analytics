@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useState } from "react";
 import { ChevronDown, Download, FileJson, FileText, Table } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,8 @@ export function DemoPdfExportButton({ site }: { site: DemoSite }) {
 
   return (
     <Button
+      help="Downloads a PDF of the demo data. Demo only."
+      effect="read"
       variant="secondary"
       size="sm"
       loading={exporting}
@@ -125,7 +128,10 @@ export function DemoExportAllDataButton() {
   const exporting = format !== null;
   return (
     <div className="relative">
-      <button
+      <HelpButton
+        help="Opens the download options for the demo data. Demo only."
+        effect="read"
+        block
         type="button"
         disabled={exporting}
         aria-expanded={open}
@@ -139,7 +145,7 @@ export function DemoExportAllDataButton() {
         )}
         {exporting ? "Exporting demo data" : "Export demo data"}
         {!exporting && <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
+      </HelpButton>
       {open && (
         <div className="absolute bottom-11 z-10 w-full space-y-1 rounded-md border border-border bg-card p-1 shadow-lg">
           <ExportOption
@@ -172,7 +178,9 @@ function ExportOption({
   onClick: () => void;
 }) {
   return (
-    <button
+    <HelpButton
+      help="Downloads the demo data in this format. Demo only."
+      effect="read"
       type="button"
       onClick={onClick}
       className={cn(
@@ -186,6 +194,6 @@ function ExportOption({
           {detail}
         </span>
       </span>
-    </button>
+    </HelpButton>
   );
 }

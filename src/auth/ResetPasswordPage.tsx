@@ -88,7 +88,13 @@ export function ResetPasswordPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full" loading={busy}>
+          <Button
+            help="Saves your new password."
+            effect="data"
+            type="submit"
+            className="w-full"
+            loading={busy}
+          >
             Update password
           </Button>
         </form>
@@ -115,7 +121,12 @@ export function ResetPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <Button type="submit" className="w-full" loading={busy}>
+        <Button
+          help="Emails you a link to choose a new password."
+          type="submit"
+          className="w-full"
+          loading={busy}
+        >
           Send reset link
         </Button>
         <div className="text-center text-sm">

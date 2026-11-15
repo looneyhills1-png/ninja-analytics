@@ -1,3 +1,4 @@
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -51,17 +52,19 @@ export function HealthBadge({
 }) {
   const { Icon, chip } = STYLES[health.level];
   return (
-    <span
-      title={health.reason}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
-        chip,
-        className,
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      {health.title}
-    </span>
+    <Tooltip content={health.reason}>
+      <span
+        tabIndex={0}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
+          chip,
+          className,
+        )}
+      >
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+        {health.title}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -76,13 +79,15 @@ export function HealthIcon({
 }) {
   const { Icon, text } = STYLES[health.level];
   return (
-    <span
-      title={`${label}: ${health.title} - ${health.reason}`}
-      className={cn("inline-flex", text)}
-      role="img"
-      aria-label={`${label}: ${health.title}. ${health.reason}`}
-    >
-      <Icon className="h-4 w-4" aria-hidden />
-    </span>
+    <Tooltip content={`${label}: ${health.title} - ${health.reason}`}>
+      <span
+        tabIndex={0}
+        className={cn("inline-flex", text)}
+        role="img"
+        aria-label={`${label}: ${health.title}. ${health.reason}`}
+      >
+        <Icon className="h-4 w-4" aria-hidden />
+      </span>
+    </Tooltip>
   );
 }

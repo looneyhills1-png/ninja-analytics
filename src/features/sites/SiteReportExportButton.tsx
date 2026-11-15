@@ -327,6 +327,8 @@ export function SiteReportExportButton({ site }: { site: SiteWithStatuses }) {
   return (
     <div className="flex flex-col items-end gap-1">
       <Button
+        help="Downloads a PDF report of this site's data. Read-only."
+        effect="read"
         variant="secondary"
         size="sm"
         loading={exporting}
