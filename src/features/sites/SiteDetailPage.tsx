@@ -1,3 +1,5 @@
+import { SiteOptimisationPanel } from "@/features/intelligence/SiteOptimisationPanel";
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ExternalLink, Pencil } from "lucide-react";
@@ -130,11 +132,9 @@ export function SiteDetailPage() {
             variant="secondary"
             size="sm"
             disabled={privacy.enabled}
-            title={
-              privacy.enabled
-                ? "Turn off Hide all data to edit site settings."
-                : undefined
-            }
+            disabledReason="Turn off Hide all data to edit site settings."
+            help="Edit this site's name, domain and connected Google and Bing accounts."
+            effect="data"
             onClick={() => setEditing(true)}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden />
@@ -152,6 +152,12 @@ export function SiteDetailPage() {
           onDeleted={() => navigate("/sites", { replace: true })}
         />
       )}
+
+      <SiteOptimisationPanel
+        siteId={site.id}
+        siteName={site.name}
+        siteDomain={site.domain}
+      />
 
       {/* Integration health */}
       <div className="grid gap-3 sm:grid-cols-3">
@@ -562,7 +568,9 @@ function RangeSelector({
   return (
     <div className="inline-flex rounded-md border border-border p-0.5">
       {RANGES.map((r) => (
-        <button
+        <HelpButton
+          help="Changes the date range used by this page. Display only."
+          effect="read"
           key={r}
           onClick={() => onChange(r)}
           className={cn(
@@ -573,7 +581,7 @@ function RangeSelector({
           )}
         >
           {r}d
-        </button>
+        </HelpButton>
       ))}
     </div>
   );

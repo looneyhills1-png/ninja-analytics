@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { Star } from "lucide-react";
 import {
   useSiteSearchTerms,
@@ -141,7 +142,9 @@ function TermsTable({
                     <td className="max-w-[14rem] px-3 py-2">
                       <div className="flex items-center gap-1.5">
                         {onToggleTrack && trackedSet && (
-                          <button
+                          <HelpButton
+                            help="Adds or removes this query from the queries whose position you track."
+                            effect="data"
                             type="button"
                             aria-label={
                               trackedSet.has(row.key)
@@ -169,7 +172,7 @@ function TermsTable({
                               }
                               aria-hidden
                             />
-                          </button>
+                          </HelpButton>
                         )}
                         <span
                           className="truncate"

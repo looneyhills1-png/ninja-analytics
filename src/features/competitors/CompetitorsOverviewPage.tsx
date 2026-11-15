@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
@@ -141,6 +142,8 @@ export function CompetitorsOverviewPage() {
             className="h-9 w-40 rounded-md border border-border bg-card px-3 text-sm"
           />
           <Button
+            help="Adds a competitor domain to track. Saved in Ninja Analytics only."
+            effect="data"
             size="sm"
             loading={addMutation.isPending}
             onClick={() => void handleAdd(domainInput)}
@@ -167,7 +170,9 @@ export function CompetitorsOverviewPage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {suggestions.map((s) => (
-                <button
+                <HelpButton
+                  help="Adds this suggested competitor to your tracked list."
+                  effect="data"
                   key={s.domain}
                   type="button"
                   onClick={() => void handleAdd(s.domain, true)}
@@ -178,7 +183,7 @@ export function CompetitorsOverviewPage() {
                   <span className="text-muted-foreground">
                     &middot; seen {s.appearanceCount}x
                   </span>
-                </button>
+                </HelpButton>
               ))}
             </div>
           </div>
@@ -194,7 +199,10 @@ export function CompetitorsOverviewPage() {
         <>
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
             {insights.map((insight) => (
-              <button
+              <HelpButton
+                help="Shows the details for this competitor. Display only."
+                effect="read"
+                block
                 key={insight.domain}
                 type="button"
                 onClick={() => setSelectedDomain(insight.domain)}
@@ -234,7 +242,7 @@ export function CompetitorsOverviewPage() {
                     {insight.weakerCount} weaker
                   </span>
                 </div>
-              </button>
+              </HelpButton>
             ))}
           </div>
 
@@ -282,7 +290,9 @@ export function CompetitorsOverviewPage() {
                       "unique",
                     ] as const
                   ).map((c) => (
-                    <button
+                    <HelpButton
+                      help="Filters the list to this category. Display only."
+                      effect="read"
                       key={c}
                       type="button"
                       onClick={() => setCategoryFilter(c)}
@@ -294,7 +304,7 @@ export function CompetitorsOverviewPage() {
                       )}
                     >
                       {c === "all" ? "All" : CATEGORY_LABEL[c]}
-                    </button>
+                    </HelpButton>
                   ))}
                 </div>
               </div>

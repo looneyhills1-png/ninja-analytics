@@ -1,6 +1,7 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, type HelpEffect } from "@/components/ui/tooltip";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
@@ -24,6 +25,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
+  /** Plain-English explanation of what pressing this does. A legacy `title`
+   * is shown the same way, so every labelled button explains itself on
+   * hover, keyboard focus and touch press-and-hold. */
+  help?: string;
+  /** Whether the action only reads, saves in Ninja Analytics, or can change a website. */
+  effect?: HelpEffect;
+  /** Why the button is currently unavailable (shown when disabled). */
+  disabledReason?: string;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -35,11 +44,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       loading,
       disabled,
       children,
+      help,
+      effect,
+      disabledReason,
+      title,
       ...props
     },
     ref,
   ) => {
-    return (
+    const button = (
       <button
         ref={ref}
         disabled={disabled || loading}
@@ -54,6 +67,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {loading && <Spinner />}
         {children}
       </button>
+    );
+    const text = help ?? title;
+    if (!text && !disabledReason) return button;
+    return (
+      <Tooltip
+        content={text ?? ""}
+        effect={effect}
+        disabledReason={disabled || loading ? disabledReason : undefined}
+      >
+        {button}
+      </Tooltip>
     );
   },
 );

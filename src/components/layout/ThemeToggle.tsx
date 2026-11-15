@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { Monitor, Moon, Sun } from "lucide-react";
 import {
   nextThemePreference,
@@ -23,7 +24,10 @@ export function ThemeToggle() {
   const Icon = ICONS[theme.preference];
 
   return (
-    <button
+    <HelpButton
+      help="Switches between light, dark and automatic colours. Display only."
+      effect="read"
+      block
       type="button"
       onClick={theme.cycle}
       aria-label={`Theme: ${LABELS[theme.preference]}. Switch to ${
@@ -34,6 +38,6 @@ export function ThemeToggle() {
       <Icon className="h-4 w-4" aria-hidden />
       Theme
       <span className="ml-auto text-xs">{LABELS[theme.preference]}</span>
-    </button>
+    </HelpButton>
   );
 }

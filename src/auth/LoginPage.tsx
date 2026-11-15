@@ -82,7 +82,12 @@ export function LoginPage() {
           )}
         </div>
 
-        <Button type="submit" className="w-full" loading={isSubmitting}>
+        <Button
+          help="Signs you in. You will then be asked for your authenticator code."
+          type="submit"
+          className="w-full"
+          loading={isSubmitting}
+        >
           Sign in
         </Button>
 

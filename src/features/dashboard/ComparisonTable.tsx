@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -194,7 +195,9 @@ function Th({
   const active = sort.key === k;
   return (
     <th className={cn("px-3 py-2.5 font-medium", numeric && "text-right")}>
-      <button
+      <HelpButton
+        help="Sorts the table by this column. Display only."
+        effect="read"
         onClick={() => onSort(k)}
         className={cn(
           "inline-flex items-center gap-1 hover:text-foreground",
@@ -208,7 +211,7 @@ function Th({
           ) : (
             <ArrowDown className="h-3 w-3" />
           ))}
-      </button>
+      </HelpButton>
     </th>
   );
 }

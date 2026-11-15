@@ -23,6 +23,8 @@ export function ErrorState({
       </p>
       {onRetry && (
         <Button
+          help="Loads this section again. Read-only."
+          effect="read"
           variant="secondary"
           size="sm"
           className="mt-4"

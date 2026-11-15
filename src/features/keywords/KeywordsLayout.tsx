@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { NavLink, Outlet, useSearchParams } from "react-router-dom";
 import { useSites } from "@/lib/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -84,7 +85,9 @@ export function KeywordsLayout() {
           </select>
           <div className="inline-flex rounded-md border border-border p-0.5">
             {RANGES.map((r) => (
-              <button
+              <HelpButton
+                help="Changes the date range used by the keyword numbers. Display only."
+                effect="read"
                 key={r}
                 onClick={() => setDays(r)}
                 className={cn(
@@ -95,7 +98,7 @@ export function KeywordsLayout() {
                 )}
               >
                 {r}d
-              </button>
+              </HelpButton>
             ))}
           </div>
         </div>

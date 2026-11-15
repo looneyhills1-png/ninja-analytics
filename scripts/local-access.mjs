@@ -68,6 +68,34 @@ export function createTokenSource(
   };
 }
 
+/** Same loopback / same-origin checks as the proxy, for local-only routes
+ * that are not forwarded to Supabase (e.g. the local AI endpoints). */
+export function checkLocalCall({ headers }, port) {
+  const host = headers.host ?? "";
+  if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) {
+    return { ok: false, status: 403, reason: "bad host" };
+  }
+  if (
+    headers["cf-ray"] ||
+    headers["cf-connecting-ip"] ||
+    headers["x-forwarded-for"]
+  ) {
+    return { ok: false, status: 403, reason: "proxied request" };
+  }
+  const site = headers["sec-fetch-site"];
+  if (site && site !== "same-origin") {
+    return { ok: false, status: 403, reason: "cross-site request" };
+  }
+  const origin = headers.origin;
+  if (origin && origin !== `http://${host}`) {
+    return { ok: false, status: 403, reason: "foreign origin" };
+  }
+  if (headers[LOCAL_HEADER] !== "1") {
+    return { ok: false, status: 403, reason: "missing local header" };
+  }
+  return { ok: true };
+}
+
 /**
  * Decide whether a browser request to /sb/* may be proxied.
  * @returns {{ok: true, upstreamPath: string} | {ok: false, status: number, reason: string}}

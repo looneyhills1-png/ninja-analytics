@@ -18,6 +18,7 @@ export function NotAuthorizedPage() {
       </p>
       <div className="mt-4">
         <Button
+          help="Signs you out so you can try a different account."
           variant="secondary"
           className="w-full"
           onClick={() => void signOut()}

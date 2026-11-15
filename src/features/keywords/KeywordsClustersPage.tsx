@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useKeywordOpportunities } from "@/lib/hooks";
@@ -80,7 +81,10 @@ export function KeywordsClustersPage() {
         <div className="space-y-2">
           {clusters.map((cluster) => (
             <Card key={cluster.id}>
-              <button
+              <HelpButton
+                help="Shows or hides the queries in this cluster. Display only."
+                effect="read"
+                block
                 type="button"
                 className="flex w-full items-center justify-between gap-3 p-4 text-left"
                 onClick={() =>
@@ -118,7 +122,7 @@ export function KeywordsClustersPage() {
                     {MAPPING_LABEL[cluster.mapping]}
                   </span>
                 </div>
-              </button>
+              </HelpButton>
               {expanded === cluster.id && (
                 <div className="border-t border-border px-4 py-3">
                   <table className="w-full text-sm">

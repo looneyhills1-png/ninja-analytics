@@ -1236,6 +1236,130 @@ export interface Database {
         >;
         Relationships: [];
       };
+      site_optimisation: {
+        Row: {
+          site_id: string;
+          mode: "monitor" | "safe_auto" | "approval_required";
+          mode_changed_at: string;
+          mode_changed_by: string | null;
+          last_run_id: string | null;
+          last_run_at: string | null;
+        };
+        Insert: {
+          site_id: string;
+          mode?: "monitor" | "safe_auto" | "approval_required";
+          mode_changed_at?: string;
+          mode_changed_by?: string | null;
+          last_run_id?: string | null;
+          last_run_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["site_optimisation"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      optimisation_runs: {
+        Row: {
+          id: string;
+          site_id: string;
+          started_at: string;
+          finished_at: string | null;
+          mode: string;
+          status: "success" | "failed";
+          health: Json;
+          summary: Json;
+          error_message: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          started_at?: string;
+          finished_at?: string | null;
+          mode: string;
+          status?: "success" | "failed";
+          health?: Json;
+          summary?: Json;
+          error_message?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["optimisation_runs"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      optimisation_changes: {
+        Row: {
+          id: string;
+          site_id: string;
+          run_id: string | null;
+          opportunity_id: string | null;
+          url: string | null;
+          title: string;
+          problem: string;
+          recommendation: string;
+          change_class: string;
+          risk: "low" | "substantial";
+          priority: number;
+          status:
+            | "proposed"
+            | "needs_approval"
+            | "applied"
+            | "verified"
+            | "rolled_back"
+            | "rejected"
+            | "failed";
+          auto_eligible: boolean;
+          evidence: Json;
+          before_value: Json | null;
+          after_value: Json | null;
+          repo: string | null;
+          file_path: string | null;
+          base_sha: string | null;
+          commit_sha: string | null;
+          rollback_sha: string | null;
+          fix_run_id: string | null;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<
+          Database["public"]["Tables"]["optimisation_changes"]["Row"]
+        > & {
+          site_id: string;
+          title: string;
+          problem: string;
+          recommendation: string;
+          change_class: string;
+          risk: "low" | "substantial";
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["optimisation_changes"]["Row"]
+        >;
+        Relationships: [];
+      };
+      optimisation_events: {
+        Row: {
+          id: string;
+          site_id: string;
+          change_id: string | null;
+          at: string;
+          actor: string;
+          event: string;
+          detail: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          change_id?: string | null;
+          at?: string;
+          actor: string;
+          event: string;
+          detail?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["optimisation_events"]["Insert"]
+        >;
+        Relationships: [];
+      };
       opportunity_events: {
         Row: {
           id: string;
@@ -1667,6 +1791,10 @@ export type OpportunityRow = Tables<"opportunities">;
 export type CollectorState = Tables<"collector_state">;
 export type SystemNotice = Tables<"system_notices">;
 export type OpportunityEvent = Tables<"opportunity_events">;
+export type SiteOptimisation = Tables<"site_optimisation">;
+export type OptimisationRun = Tables<"optimisation_runs">;
+export type OptimisationChange = Tables<"optimisation_changes">;
+export type OptimisationEvent = Tables<"optimisation_events">;
 export type OpportunityReview = Tables<"opportunity_reviews">;
 export type OpportunityStatus = OpportunityRow["status"];
 export type OpportunityClassification = NonNullable<

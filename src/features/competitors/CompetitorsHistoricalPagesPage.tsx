@@ -67,6 +67,8 @@ export function CompetitorsHistoricalPagesPage() {
       <div className="flex flex-wrap items-center gap-2">
         <DomainPicker domains={domains} value={domain} onChange={setDomain} />
         <Button
+          help="Fetches this competitor's page history from Common Crawl, a free public archive, and saves it here. Your websites are not touched."
+          effect="data"
           size="sm"
           variant="secondary"
           loading={syncMutation.isPending}

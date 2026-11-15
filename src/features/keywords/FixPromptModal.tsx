@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,13 +59,14 @@ export function FixPromptModal({
             <h2 className="text-base font-semibold">Fix prompt</h2>
             <p className="text-xs text-muted-foreground">{title}</p>
           </div>
-          <button
+          <HelpButton
+            help="Closes this window."
             onClick={onClose}
             aria-label="Close"
             className="rounded-md p-1 text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
-          </button>
+          </HelpButton>
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
@@ -88,10 +90,20 @@ export function FixPromptModal({
         )}
 
         <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button
+            help="Closes this window. Nothing was changed."
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+          >
             Close
           </Button>
-          <Button type="button" onClick={() => void handleCopy()}>
+          <Button
+            help="Copies the prompt to your clipboard so you can hand it to an engineer or AI tool. Nothing is edited or published."
+            effect="read"
+            type="button"
+            onClick={() => void handleCopy()}
+          >
             {copied ? "Copied!" : "Copy prompt"}
           </Button>
         </div>

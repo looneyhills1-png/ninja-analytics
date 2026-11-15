@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Play, ShieldCheck } from "lucide-react";
@@ -113,6 +114,8 @@ export function SiteAuditPage() {
             ))}
           </select>
           <Button
+            help="Visits up to 100 pages of your own site (read-only, like a search engine) and saves the findings here. Changes nothing on your site."
+            effect="data"
             size="sm"
             loading={auditMutation.isPending}
             onClick={() => void auditMutation.mutate()}
@@ -202,7 +205,9 @@ export function SiteAuditPage() {
                   <div className="flex gap-1">
                     {(["all", "error", "warning", "notice"] as const).map(
                       (s) => (
-                        <button
+                        <HelpButton
+                          help="Shows only issues of this severity. Display only."
+                          effect="read"
                           key={s}
                           type="button"
                           onClick={() => setSeverityFilter(s)}
@@ -216,7 +221,7 @@ export function SiteAuditPage() {
                           {s}{" "}
                           {s !== "all" &&
                             `(${issues.filter((i) => i.severity === s).length})`}
-                        </button>
+                        </HelpButton>
                       ),
                     )}
                   </div>

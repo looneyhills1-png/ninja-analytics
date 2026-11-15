@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { ChevronDown, ChevronRight, Info, Plus, Trash2 } from "lucide-react";
@@ -197,6 +198,8 @@ export function KeywordsRankingsPage() {
               className="h-9 w-40 rounded-md border border-border bg-card px-2 text-sm"
             />
             <Button
+              help="Starts tracking this keyword's ranking. Saved in Ninja Analytics only."
+              effect="data"
               size="sm"
               loading={addMutation.isPending}
               onClick={() => void handleAdd()}
@@ -230,7 +233,9 @@ export function KeywordsRankingsPage() {
                 return (
                   <div key={insight.keyword.id}>
                     <div className="flex flex-wrap items-center gap-3 p-3">
-                      <button
+                      <HelpButton
+                        help="Shows or hides this keyword's history. Display only."
+                        effect="read"
                         type="button"
                         onClick={() =>
                           setExpanded(isOpen ? null : insight.keyword.id)
@@ -243,7 +248,7 @@ export function KeywordsRankingsPage() {
                         ) : (
                           <ChevronRight className="h-4 w-4" />
                         )}
-                      </button>
+                      </HelpButton>
                       <div className="min-w-[10rem] flex-1">
                         <p className="truncate text-sm font-medium">
                           {privacy.maskText(
@@ -332,7 +337,9 @@ export function KeywordsRankingsPage() {
                           "Never checked"
                         )}
                       </div>
-                      <button
+                      <HelpButton
+                        help="Stops tracking this keyword and deletes its saved history from Ninja Analytics. Your website is not affected."
+                        effect="data"
                         type="button"
                         aria-label="Stop tracking"
                         onClick={() =>
@@ -341,7 +348,7 @@ export function KeywordsRankingsPage() {
                         className="shrink-0 text-muted-foreground hover:text-critical"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      </HelpButton>
                     </div>
                     {isOpen && (
                       <div className="space-y-3 border-t border-border bg-muted/10 p-3">

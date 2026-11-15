@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -121,6 +122,8 @@ function RequestIndexingPanel({
         </p>
         <div className="flex items-center gap-2">
           <Button
+            help="Copies this URL to your clipboard."
+            effect="read"
             type="button"
             size="sm"
             variant="secondary"
@@ -434,7 +437,10 @@ export function IndexingPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {(Object.keys(BUCKET_LABELS) as IndexingSummaryBucket[]).map(
               (b) => (
-                <button
+                <HelpButton
+                  help="Shows only the pages in this indexing status. Click again to clear. Display only."
+                  effect="read"
+                  block
                   key={b}
                   type="button"
                   onClick={() => setBucketFilter(bucketFilter === b ? null : b)}
@@ -456,7 +462,7 @@ export function IndexingPage() {
                   >
                     {summary[b]}
                   </p>
-                </button>
+                </HelpButton>
               ),
             )}
           </div>
@@ -502,6 +508,8 @@ export function IndexingPage() {
                       </ul>
                       <div className="flex items-center gap-2 pt-1">
                         <Button
+                          help="Asks Google's URL Inspection API how it sees this page and saves the answer here. Your website is not touched. Uses Google's daily inspection quota."
+                          effect="data"
                           type="button"
                           size="sm"
                           variant="secondary"
@@ -535,6 +543,8 @@ export function IndexingPage() {
               <div className="flex items-center gap-2">
                 {selected.size > 0 && (
                   <Button
+                    help="Asks Google how it sees each selected page and saves the answers here. Your website is not touched. Uses Google's daily inspection quota."
+                    effect="data"
                     type="button"
                     size="sm"
                     loading={inspectMutation.isPending}
@@ -693,6 +703,8 @@ export function IndexingPage() {
                             </td>
                             <td className="px-2 py-2">
                               <Button
+                                help="Asks Google's URL Inspection API how it sees this page and saves the answer here. Your website is not touched."
+                                effect="data"
                                 type="button"
                                 size="sm"
                                 variant="secondary"

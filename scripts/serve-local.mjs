@@ -17,11 +17,12 @@
  */
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { extname, dirname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildUpstreamHeaders,
+  checkLocalCall,
   checkProxyRequest,
   createTokenSource,
 } from "./local-access.mjs";
@@ -46,6 +47,63 @@ function loadAccess() {
     return null;
   }
 }
+import { createLocalAi } from "./local-ai.mjs";
+
+const usageFile = join(here, "local-ai-usage.json");
+const localAi = createLocalAi({
+  load: () => {
+    try {
+      return JSON.parse(readFileSync(usageFile, "utf8"));
+    } catch {
+      return null;
+    }
+  },
+  save: (state) => {
+    try {
+      writeFileSync(usageFile, JSON.stringify(state));
+    } catch {
+      /* the budget then only lives in memory until the next save */
+    }
+  },
+});
+
+function sendJson(res, status, body) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...SECURITY_HEADERS,
+  });
+  res.end(JSON.stringify(body));
+}
+
+async function localAiRoute(req, res, pathname) {
+  const verdict = checkLocalCall({ headers: req.headers }, port);
+  if (!verdict.ok) return deny(res, verdict.status, verdict.reason);
+  if (pathname === "/local-ai/status" && req.method === "GET") {
+    return sendJson(res, 200, await localAi.status());
+  }
+  if (pathname === "/local-ai/explain" && req.method === "POST") {
+    let raw = "";
+    for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > 20_000) return deny(res, 413, "too large");
+    }
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return deny(res, 400, "bad json");
+    }
+    const out = await localAi.explain({
+      kind: body?.kind,
+      siteKey: typeof body?.siteKey === "string" ? body.siteKey : "portfolio",
+      evidence: body?.evidence,
+    });
+    return sendJson(res, out.ok ? 200 : (out.status ?? 500), out);
+  }
+  return deny(res, 404, "Not found");
+}
+
 const access = loadAccess();
 if (!access) console.error("local access not configured: /sb will answer 503");
 
@@ -125,6 +183,11 @@ createServer(async (req, res) => {
     return;
   }
   if (url.pathname.startsWith("/sb/")) return proxy(req, res);
+  if (url.pathname.startsWith("/local-ai/")) {
+    return localAiRoute(req, res, url.pathname).catch(() =>
+      deny(res, 500, "local ai error"),
+    );
+  }
 
   const file = await resolveFile(url.pathname).catch(() => null);
   if (!file) return deny(res, 404, "Not found");

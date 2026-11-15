@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Wand2 } from "lucide-react";
@@ -257,15 +258,16 @@ export function CtrOptimizerPage() {
                       </details>
                     </td>
                     <td className="px-2 py-2">
-                      <button
+                      <HelpButton
+                        help="Opens a ready-to-copy prompt for this page. It only writes text; nothing is edited or published."
+                        effect="read"
                         type="button"
                         onClick={() => setFixPromptOpportunity(o)}
-                        title="Generate CTR Fix Prompt"
                         className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
                       >
                         <Wand2 className="h-3 w-3" />
                         Fix
-                      </button>
+                      </HelpButton>
                     </td>
                   </tr>
                 ))}

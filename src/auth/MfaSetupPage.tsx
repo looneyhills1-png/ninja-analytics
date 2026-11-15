@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/ui/help-button";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -147,20 +148,27 @@ export function MfaSetupPage() {
             )}
           </div>
 
-          <Button type="submit" className="w-full" loading={verifying}>
+          <Button
+            help="Confirms the code from your authenticator app and finishes setting up two-step sign-in."
+            effect="data"
+            type="submit"
+            className="w-full"
+            loading={verifying}
+          >
             Verify and continue
           </Button>
         </form>
       )}
 
       <div className="mt-4 text-center text-sm">
-        <button
+        <HelpButton
+          help="Signs you out of this browser session."
           type="button"
           onClick={() => void signOut()}
           className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           Sign out
-        </button>
+        </HelpButton>
       </div>
     </AuthShell>
   );

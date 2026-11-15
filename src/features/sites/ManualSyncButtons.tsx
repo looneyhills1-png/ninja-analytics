@@ -35,6 +35,8 @@ export function ManualSyncButtons({ site }: { site: SiteWithStatuses }) {
       <div className="flex flex-wrap gap-2">
         {SOURCES.map((source) => (
           <Button
+            help="Collects the latest data for this source now instead of waiting for the schedule. Reads from the provider and saves here; your website is not touched."
+            effect="data"
             key={source}
             variant="secondary"
             size="sm"
@@ -46,6 +48,8 @@ export function ManualSyncButtons({ site }: { site: SiteWithStatuses }) {
           </Button>
         ))}
         <Button
+          help="Collects the latest data for every enabled source now. Reads from the providers and saves here; your website is not touched."
+          effect="data"
           size="sm"
           disabled={!anyEnabled || mutation.isPending}
           loading={pending === "all"}

@@ -115,6 +115,8 @@ export function AiSignalsTab({
             <ProvenanceBadge kind="measured" />
           </div>
           <Button
+            help="Pulls AI referral sessions from Google Analytics (read-only) and saves them here."
+            effect="data"
             variant="secondary"
             size="sm"
             disabled={sync.isPending}

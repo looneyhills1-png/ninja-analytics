@@ -94,3 +94,32 @@ statuses back to four) and copy `validate-opportunities`, `build-opportunities` 
 - **Approval is yours.** `Approved` only records your decision. Ninja Analytics never publishes or edits a website.
 - PostgREST caps every response at 1000 rows (`PGRST_DB_MAX_ROWS`); server code reads large tables with
   `fetchAllRows` pagination.
+
+## Site optimisation, local AI and help text (migration 0026)
+
+* `0026_site_optimisation.sql` adds `site_optimisation` (mode per site, default
+  `monitor`), `optimisation_runs`, `optimisation_changes` and
+  `optimisation_events` (append-only). Rollback: `supabase/rollback/0026_down.sql`.
+  Copy `analyse-site`, `optimise-apply` and `_shared/optimise.ts` into
+  `C:\Ninja\supabase\volumes\functions` after pulling.
+* **Analyse & Optimise** (site detail page) runs the existing site audit when
+  it is more than 7 days old, then `analyse-site`: read-only, deterministic, no
+  AI. At most 12 analyses per site per day; repeats within a minute are reused.
+* **Modes**: Monitor (default, read-only), Safe auto-fix (explicit owner
+  action, type ENABLE), Approval required. In Safe auto-fix only the
+  allowlisted change `meta_description_refresh` can be applied, only for sites
+  with an authorised repository (NinjaTickets), at most 2 per analysis and 3
+  per day, after: clean baseline, evidence gates (same as Run Fix), backup of
+  the previous file, a diff of at most 4 lines, and a self-check. Applied
+  changes are recorded in `fix_runs` so `advance-fix-runs` verifies the
+  deployment. Rollback restores the exact backup and refuses if the file has
+  changed since. Requires the `GITHUB_PAT` function secret (not set by this
+  work).
+* **Local AI**: `scripts/local-ai.mjs` talks only to Ollama on 127.0.0.1:11434
+  (prefers `qwen3.5:9b`). 30 runs per day overall, 6 per site, identical
+  requests cached for 6 hours, one at a time, 120 s timeout, at most two
+  attempts. Usage persists in `local-ai-usage.json` next to `serve-local.mjs`.
+  No Anthropic, Gemini or other external inference is used.
+* **Help text**: every `Button` / `HelpButton` carries `help` (and `effect`:
+  read, data, website). `src/test/controls-help.test.ts` fails if a control is
+  added without it. `node scripts/audit-controls.mjs` lists them.

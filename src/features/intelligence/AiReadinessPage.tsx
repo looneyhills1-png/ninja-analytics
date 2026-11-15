@@ -59,6 +59,8 @@ export function AiReadinessPage() {
         <div className="flex items-center gap-2">
           <SitePicker sites={sites} value={siteId} onChange={setPicked} />
           <Button
+            help="Checks your own site's robots.txt, sitemap and about 15 pages for AI crawler access, politely paced, and saves the findings here. Reads your site only; changes nothing on it."
+            effect="data"
             variant="secondary"
             size="sm"
             disabled={audit.isPending || !siteId}
