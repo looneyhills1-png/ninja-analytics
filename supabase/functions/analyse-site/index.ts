@@ -11,6 +11,18 @@
 import { fetchAllRows, serveIntel } from "../_shared/intel-common.ts";
 import { SyncError } from "../_shared/errors.ts";
 import {
+  diagnoseUrl,
+  type Diagnosis,
+  type InspectionFact,
+  type InventoryRow,
+} from "../_shared/coverage.ts";
+import {
+  buildQueryFindings,
+  type DeviceRow,
+  type QPRow,
+  type QueryFinding,
+} from "../_shared/query-intel.ts";
+import {
   assessSite,
   type CtrCandidate,
   type OptimiseMode,
@@ -106,20 +118,28 @@ serveIntel(async ({ admin, body }) => {
 
   // CTR-first candidates: ranking well, plenty of impressions, no clicks.
   const ctrCandidates: CtrCandidate[] = [];
+  let qpRecent: QPRow[] = [];
+  let qpPrevious: QPRow[] = [];
   if (through) {
     const start = isoDate(
+      new Date(new Date(`${through}T00:00:00Z`).getTime() - 55 * DAY),
+    );
+    const recentStart = isoDate(
       new Date(new Date(`${through}T00:00:00Z`).getTime() - 27 * DAY),
     );
     const rows = await fetchAllRows<{
       query: string;
       page: string;
+      metric_date: string;
       clicks: number;
       impressions: number;
       average_position: number | null;
     }>((from, to) =>
       admin
         .from("search_query_page_daily")
-        .select("query, page, clicks, impressions, average_position")
+        .select(
+          "query, page, metric_date, clicks, impressions, average_position",
+        )
         .eq("site_id", siteId)
         .eq("engine", "google")
         .gte("metric_date", start)
@@ -129,6 +149,39 @@ serveIntel(async ({ admin, body }) => {
         .order("page")
         .range(from, to),
     );
+    // Split the 56 days; the CTR candidates use only the most recent 28.
+    const recentRows = rows.filter((r) => r.metric_date >= recentStart);
+    const toQP = (list: typeof rows): QPRow[] => {
+      const m = new Map<string, QPRow & { w: number }>();
+      for (const r of list) {
+        const k = `${r.query}\u0000${r.page}`;
+        const a = m.get(k) ?? {
+          query: r.query,
+          page: r.page,
+          clicks: 0,
+          impressions: 0,
+          position: null,
+          w: 0,
+        };
+        const imp = Number(r.impressions);
+        a.clicks += Number(r.clicks);
+        a.impressions += imp;
+        if (r.average_position != null && imp > 0) {
+          a.position = (a.position ?? 0) + Number(r.average_position) * imp;
+          a.w += imp;
+        }
+        m.set(k, a);
+      }
+      return [...m.values()].map((a) => ({
+        query: a.query,
+        page: a.page,
+        clicks: a.clicks,
+        impressions: a.impressions,
+        position: a.w > 0 ? Math.round((a.position! / a.w) * 10) / 10 : null,
+      }));
+    };
+    qpRecent = toQP(recentRows);
+    qpPrevious = toQP(rows.filter((r) => r.metric_date < recentStart));
     const agg = new Map<
       string,
       {
@@ -140,7 +193,7 @@ serveIntel(async ({ admin, body }) => {
         w: number;
       }
     >();
-    for (const r of rows) {
+    for (const r of recentRows) {
       const k = `${r.query}\u0000${r.page}`;
       const a = agg.get(k) ?? {
         query: r.query,
@@ -179,6 +232,127 @@ serveIntel(async ({ admin, body }) => {
     ctrCandidates.push(...found);
   }
 
+  // URL coverage: our inventory and Google's inspections, diagnosed per URL.
+  const inv = await fetchAllRows<Record<string, unknown>>((from, to) =>
+    admin
+      .from("url_inventory")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("url")
+      .range(from, to),
+  );
+  const inspRows = await fetchAllRows<Record<string, unknown>>((from, to) =>
+    admin
+      .from("url_inspections")
+      .select(
+        "url, ninja_status, coverage_state, last_crawl_time, last_inspected_at, google_canonical, user_canonical",
+      )
+      .eq("site_id", siteId)
+      .order("url")
+      .range(from, to),
+  );
+  const facts = new Map<string, InspectionFact>(
+    inspRows.map((i) => [
+      i.url as string,
+      {
+        ninjaStatus: i.ninja_status as string,
+        coverageState: (i.coverage_state as string) ?? null,
+        lastCrawlTime: (i.last_crawl_time as string) ?? null,
+        lastInspectedAt: i.last_inspected_at as string,
+        googleCanonical: (i.google_canonical as string) ?? null,
+        userCanonical: (i.user_canonical as string) ?? null,
+      },
+    ]),
+  );
+  const diagnoses: Diagnosis[] = inv.map((r) =>
+    diagnoseUrl(
+      {
+        url: r.url as string,
+        sources: (r.sources as InventoryRow["sources"]) ?? [],
+        inSitemap: !!r.in_sitemap,
+        isAlias: !!r.is_alias,
+        canonicalGroup: (r.canonical_group as string) ?? null,
+        liveCheckedAt: (r.live_checked_at as string) ?? null,
+        liveStatus: (r.live_status as number) ?? null,
+        liveRedirectTo: (r.live_redirect_to as string) ?? null,
+        liveCanonical: (r.live_canonical as string) ?? null,
+        liveNoindex: (r.live_noindex as boolean) ?? null,
+        liveWordCount: (r.live_word_count as number) ?? null,
+        liveError: (r.live_error as string) ?? null,
+        robotsAllowed: (r.robots_allowed as boolean) ?? null,
+      },
+      facts.get(r.url as string),
+    ),
+  );
+
+  // Query intelligence: pages' titles come from our own live checks, Bing
+  // corroboration from the stored Bing query data, devices from the weekly
+  // Search Analytics snapshot.
+  const pageText = new Map<string, string>();
+  for (const r of inv) {
+    const slug = String(r.url)
+      .replace(/^https?:\/\/[^/]+/, "")
+      .replace(/[-_/]+/g, " ");
+    pageText.set(r.url as string, `${(r.live_title as string) ?? ""} ${slug}`);
+  }
+  const bingImpressions = new Map<string, number>();
+  if (through) {
+    const bingSince = isoDate(
+      new Date(new Date(`${through}T00:00:00Z`).getTime() - 27 * DAY),
+    );
+    const bingRows = await fetchAllRows<{ query: string; impressions: number }>(
+      (from, to) =>
+        admin
+          .from("search_query_daily")
+          .select("query, impressions")
+          .eq("site_id", siteId)
+          .eq("engine", "bing")
+          .gte("metric_date", bingSince)
+          .order("metric_date")
+          .order("query")
+          .range(from, to),
+      1000,
+      20_000,
+    );
+    for (const b of bingRows) {
+      bingImpressions.set(
+        b.query,
+        (bingImpressions.get(b.query) ?? 0) + Number(b.impressions),
+      );
+    }
+  }
+  let devices: DeviceRow[] = [];
+  const { data: devSnap } = await admin
+    .from("search_dimension_snapshots")
+    .select("captured_at")
+    .eq("site_id", siteId)
+    .eq("dimension", "device")
+    .order("captured_at", { ascending: false })
+    .limit(1);
+  if (devSnap?.[0]) {
+    const { data: dv } = await admin
+      .from("search_dimension_snapshots")
+      .select("key, clicks, impressions, ctr, position")
+      .eq("site_id", siteId)
+      .eq("dimension", "device")
+      .eq("captured_at", devSnap[0].captured_at)
+      .not("key", "like", "%:%");
+    devices = (dv ?? []).map((d) => ({
+      key: d.key as string,
+      clicks: Number(d.clicks),
+      impressions: Number(d.impressions),
+      ctr: d.ctr != null ? Number(d.ctr) : null,
+      position: d.position != null ? Number(d.position) : null,
+    }));
+  }
+  const queryFindings: QueryFinding[] = buildQueryFindings({
+    recent: qpRecent,
+    previous: qpPrevious,
+    pageText,
+    bingImpressions,
+    devices,
+  });
+
   const assessment = assessSite({
     site,
     mode,
@@ -194,6 +368,8 @@ serveIntel(async ({ admin, body }) => {
     opportunities: opps ?? [],
     ctrCandidates,
     gscThrough: through,
+    diagnoses,
+    queryFindings,
     hosting: {
       platform: site.hosting_platform,
       projectId: site.hosting_project_id,

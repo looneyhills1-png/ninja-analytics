@@ -482,3 +482,106 @@ describe("assessSite index.html aliases and hosting", () => {
     expect(a.items.every((i) => i.deployment === "not_applicable")).toBe(true);
   });
 });
+
+describe("assessSite coverage and query items", () => {
+  const diag = (
+    url: string,
+    category:
+      | "undiscovered"
+      | "not_found"
+      | "content"
+      | "healthy"
+      | "alias"
+      | "redirect",
+    extra: Partial<{ evidence: string[]; needsApproval: boolean }> = {},
+  ) => ({
+    url,
+    shouldBeIndexed: "yes" as const,
+    reason: `reason ${category}`,
+    evidence: extra.evidence ?? ["Live: HTTP 200"],
+    action: `action ${category}`,
+    needsApproval: extra.needsApproval ?? false,
+    category,
+  });
+  const ww3 = { id: "s3", name: "WW3", domain: "ww3supply.com" };
+  const hosting = { platform: "chatgpt_sites", projectId: "appgprj_x" };
+
+  it("groups Google-versus-live findings, ignoring healthy pages and aliases", () => {
+    const a = assessSite({
+      ...base,
+      site: ww3,
+      hosting,
+      audit: null,
+      opportunities: [],
+      ctrCandidates: [],
+      diagnoses: [
+        diag("https://ww3supply.com/a/", "undiscovered"),
+        diag("https://ww3supply.com/b/", "undiscovered"),
+        diag("https://ww3supply.com/c/", "healthy"),
+        diag("https://ww3supply.com/d/index.html", "alias"),
+        diag("https://ww3supply.com/gone/", "not_found", {
+          evidence: ["Listed in the sitemap", "Live: HTTP 404"],
+        }),
+      ],
+    });
+    const keys = a.items.map((i) => i.key).sort();
+    expect(keys).toEqual(["coverage:not_found", "coverage:undiscovered"]);
+    const und = a.items.find((i) => i.key === "coverage:undiscovered")!;
+    expect(und.title).toBe("2 live pages are unknown to Google");
+    expect((und.evidence.urls as string[]).length).toBe(2);
+    expect(und.evidence.confidence).toBe("high");
+    const nf = a.items.find((i) => i.key === "coverage:not_found")!;
+    expect(nf.priority).toBeGreaterThan(und.priority); // 404 in the sitemap ranks higher
+  });
+
+  it("every coverage and query item on a ChatGPT Sites site is BLOCKED and never auto-eligible", () => {
+    const a = assessSite({
+      ...base,
+      mode: "safe_auto",
+      site: ww3,
+      hosting,
+      audit: null,
+      opportunities: [],
+      ctrCandidates: [],
+      diagnoses: [
+        diag("https://ww3supply.com/g/", "content", { needsApproval: true }),
+      ],
+      queryFindings: [
+        {
+          key: "near:x",
+          kind: "near_page_one",
+          title: "x is close to page one",
+          problem: "p",
+          recommendation: "r",
+          url: "https://ww3supply.com/x/",
+          priority: 60,
+          confidence: "medium",
+          evidence: { impressions: 100 },
+        },
+      ],
+    });
+    expect(a.items).toHaveLength(2);
+    for (const i of a.items) {
+      expect(i.deployment).toBe("blocked");
+      expect(i.autoEligible).toBe(false);
+      expect(i.status).toBe("needs_approval");
+    }
+    const q = a.items.find((i) => i.key === "query:near:x")!;
+    expect(q.evidence).toMatchObject({
+      confidence: "medium",
+      findingKind: "near_page_one",
+    });
+  });
+
+  it("ranking-sensitive classes are never on the safe auto allowlist", () => {
+    for (const c of [
+      "redirect",
+      "content_edit",
+      "new_page",
+      "deletion",
+      "internal_links",
+    ] as const) {
+      expect(SAFE_AUTO_ALLOWLIST).not.toContain(c);
+    }
+  });
+});

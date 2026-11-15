@@ -137,3 +137,25 @@ statuses back to four) and copy `validate-opportunities`, `build-opportunities` 
 * The site audit no longer counts a page whose canonical points at another URL
   (for example `/page/index.html` -> `/page/`) as a duplicate.
 * Rollback: `supabase/rollback/0027_down.sql`.
+
+## URL coverage and query intelligence (migration 0028)
+
+* `coverage-sync` (daily cron `ninja-coverage-daily` 05:30, also on demand from
+  a site's "Check coverage now") reads robots.txt, sitemap indexes and children,
+  Search Console pages, the latest site audit, earlier inspections and internal
+  links found on pages it checks. It live-checks and inspects only what is due
+  (weekly staleness), with per-run budgets: 30 live checks and 30 Google
+  inspections per site, 12 sitemaps, a 100 s wall clock shared equally between
+  sites (45 s for an on-demand call, because the dashboard proxy cuts at 60 s).
+  Large sites fill in over days (NinjaTickets: about 1,150 URLs at roughly 30 a
+  day). Google allows 2,000 inspections a day per property; this uses a small
+  fraction.
+* Live facts are in `url_inventory`; Google's report stays in `url_inspections`
+  and `url_inspection_history`. Site-wide indexed totals are UNKNOWN until every
+  eligible URL has been inspected.
+* `search_dimension_snapshots` holds weekly Search Analytics by device, country
+  and search type. `gsc_sitemaps` holds Google's own sitemap status.
+* Everything is read-only toward the sites and Google (read-only scope).
+* Rollback: `supabase/rollback/0028_down.sql`.
+* The Google "Page indexing" report and Core Web Vitals report are not exposed by
+  any API, so they are not read.
