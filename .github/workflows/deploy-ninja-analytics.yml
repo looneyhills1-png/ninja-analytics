@@ -34,13 +34,15 @@ name: Deploy Ninja Analytics
 # idempotent convention and are already confirmed live) - never add them
 # here without first making them idempotent too.
 
+# STATUS (2026-11-16): MANUAL ONLY. The automatic push trigger was removed.
+# Production runs locally on Recoil (self-hosted Supabase + the dashboard on
+# 127.0.0.1:4173, deployed with scripts/deploy-local.ps1), and the public route
+# is closed on purpose. The hosted Supabase project is not used. Every push to main therefore failed
+# (the project link step failed). The workflow is kept so it can still be run by hand from the
+# Actions tab as a recovery path; nothing here runs automatically.
+
 on:
   workflow_dispatch: {}
-  push:
-    branches: [main]
-    paths:
-      - "supabase/**"
-      - ".github/workflows/deploy-ninja-analytics.yml"
 
 concurrency:
   group: deploy-ninja-analytics-${{ github.ref }}
