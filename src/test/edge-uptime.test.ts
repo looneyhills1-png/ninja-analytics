@@ -75,14 +75,12 @@ describe("checkSiteUptime", () => {
   });
 
   it("reports a redirect to an internal address as blocked, without requesting it", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(null, {
-          status: 302,
-          headers: { location: "http://127.0.0.1/admin" },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: "http://127.0.0.1/admin" },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const r = await checkSiteUptime(site);
     expect(r.ok).toBe(false);
