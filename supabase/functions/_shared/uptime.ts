@@ -3,6 +3,7 @@
 // admin+aal2 auth) so the check itself has a single implementation.
 
 import { sanitizeMessage } from "./errors.ts";
+import { UnsafeUrlError, fetchPublic, publicUrl } from "./public-url.ts";
 
 export const DEFAULT_UPTIME_TIMEOUT_MS = 10_000;
 
@@ -20,15 +21,9 @@ export interface UptimeCheckResult {
   error: string | null;
 }
 
+/** Static public-web rules (see public-url.ts); null means refuse. */
 export function probeUrl(raw: string): URL | null {
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    if (url.username || url.password) return null;
-    return url;
-  } catch {
-    return null;
-  }
+  return publicUrl(raw);
 }
 
 export async function checkSiteUptime(
@@ -52,9 +47,10 @@ export async function checkSiteUptime(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = performance.now();
   try {
-    const res = await fetch(url, {
+    // Redirects (http to https, www, trailing slash) are followed, but every
+    // hop is re-checked so a redirect cannot lead to an internal address.
+    const { response: res } = await fetchPublic(url, {
       method: "GET",
-      redirect: "follow",
       signal: controller.signal,
       headers: { "User-Agent": "site-analytics-uptime/1.0" },
     });
@@ -70,6 +66,16 @@ export async function checkSiteUptime(
       error: res.status < 400 ? null : `http_${res.status}`,
     };
   } catch (err) {
+    if (err instanceof UnsafeUrlError) {
+      return {
+        site_id: site.id,
+        checked_at: checkedAt,
+        ok: false,
+        status_code: null,
+        latency_ms: null,
+        error: err.reason,
+      };
+    }
     const aborted = (err as { name?: string })?.name === "AbortError";
     return {
       site_id: site.id,

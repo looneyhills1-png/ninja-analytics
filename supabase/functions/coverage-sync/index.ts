@@ -40,6 +40,7 @@ import {
   parseSitemapLocs,
 } from "../_shared/site-crawler.ts";
 import { inspectAndStoreUrls } from "../_shared/gsc-url-inspection.ts";
+import { fetchPublic } from "../_shared/public-url.ts";
 import {
   listSitemaps,
   queryByDimension,
@@ -54,7 +55,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function getText(url: string, ms = 15_000): Promise<string | null> {
   try {
-    const res = await fetch(url, {
+    // robots.txt may name any sitemap URL, so keep this on the public web.
+    const { response: res } = await fetchPublic(url, {
       headers: { "User-Agent": UA },
       signal: AbortSignal.timeout(ms),
     });
