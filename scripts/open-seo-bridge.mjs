@@ -116,7 +116,7 @@ export function createOpenSeoBridge({
       try {
         wire = JSON.parse(text);
       } catch {
-        const events = text.split(/\\r?\\n/).filter((line) => line.startsWith("data:"));
+        const events = text.split(/\r?\n/).filter((line) => line.startsWith("data:"));
         wire = events.map((line) => {
           try { return JSON.parse(line.slice(5).trim()); } catch { return null; }
         }).find((value) => value && (value.result || value.error));
