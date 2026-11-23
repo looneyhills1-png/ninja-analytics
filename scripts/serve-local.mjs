@@ -48,6 +48,16 @@ function loadAccess() {
   }
 }
 import { createLocalAi } from "./local-ai.mjs";
+import { createOpenSeoBridge } from "./open-seo-bridge.mjs";
+
+// The key is optional for a loopback-only OpenSEO instance in local_noauth
+// mode. For password mode, keep it in an unserved local text file (not git).
+function readOpenSeoKey() {
+  try { return readFileSync(join(here, "open-seo-api-key.txt"), "utf8").trim(); }
+  catch { return process.env.OPENSEO_API_KEY ?? ""; }
+}
+const openSeo = createOpenSeoBridge({ apiKey: readOpenSeoKey() });
+
 
 const usageFile = join(here, "local-ai-usage.json");
 const localAi = createLocalAi({
@@ -100,6 +110,33 @@ async function localAiRoute(req, res, pathname) {
       evidence: body?.evidence,
     });
     return sendJson(res, out.ok ? 200 : (out.status ?? 500), out);
+  }
+  return deny(res, 404, "Not found");
+}
+
+
+async function openSeoRoute(req, res, pathname) {
+  const verdict = checkLocalCall({ headers: req.headers }, port);
+  if (!verdict.ok) return deny(res, verdict.status, verdict.reason);
+  if (pathname === "/open-seo/status" && req.method === "GET") {
+    return sendJson(res, 200, await openSeo.status());
+  }
+  if (pathname === "/open-seo/read" && req.method === "POST") {
+    let raw = "";
+    for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > 4000) return deny(res, 413, "too large");
+    }
+    let body;
+    try { body = JSON.parse(raw); }
+    catch { return deny(res, 400, "bad json"); }
+    try {
+      const result = await openSeo.call(body?.tool, body?.args);
+      return sendJson(res, result.ok ? 200 : 502, result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "invalid request";
+      return sendJson(res, message.includes("budget") ? 429 : 400, { ok: false, error: message });
+    }
   }
   return deny(res, 404, "Not found");
 }
@@ -183,6 +220,11 @@ createServer(async (req, res) => {
     return;
   }
   if (url.pathname.startsWith("/sb/")) return proxy(req, res);
+  if (url.pathname.startsWith("/open-seo/")) {
+    return openSeoRoute(req, res, url.pathname).catch(() =>
+      deny(res, 500, "OpenSEO bridge error"),
+    );
+  }
   if (url.pathname.startsWith("/local-ai/")) {
     return localAiRoute(req, res, url.pathname).catch(() =>
       deny(res, 500, "local ai error"),
