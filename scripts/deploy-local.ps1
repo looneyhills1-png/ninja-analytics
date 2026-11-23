@@ -35,7 +35,7 @@ if ($LASTEXITCODE -ne 0) { throw "build failed" }
 New-Item -ItemType Directory -Force "$InstallDir\dist" | Out-Null
 Remove-Item "$InstallDir\dist\*" -Recurse -Force
 Copy-Item "dist\*" "$InstallDir\dist" -Recurse
-Copy-Item "scripts\serve-local.mjs", "scripts\local-access.mjs", "scripts\local-ai.mjs" $InstallDir -Force
+Copy-Item "scripts\serve-local.mjs", "scripts\local-access.mjs", "scripts\local-ai.mjs", "scripts\open-seo-bridge.mjs" $InstallDir -Force
 
 # Non-secret server config. The JWT secret is read from the stack .env at server start.
 $adminId = (docker exec supabase-db psql -U postgres -At -c "select user_id from private.admin_users limit 1").Trim()
