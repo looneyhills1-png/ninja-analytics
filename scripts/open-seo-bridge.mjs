@@ -111,10 +111,19 @@ export function createOpenSeoBridge({
     if (text.length > 1_000_000) return { ok: false, error: "OpenSEO response exceeded 1 MB" };
     let wire;
     try {
-      // Modern MCP clients use JSON; OpenSEO also supports JSON for legacy calls.
-      wire = JSON.parse(text);
+      // MCP Streamable HTTP may choose either JSON or server-sent events.
+      // Only one explicit read is ever sent; consume its terminal response.
+      try {
+        wire = JSON.parse(text);
+      } catch {
+        const events = text.split(/\\r?\\n/).filter((line) => line.startsWith("data:"));
+        wire = events.map((line) => {
+          try { return JSON.parse(line.slice(5).trim()); } catch { return null; }
+        }).find((value) => value && (value.result || value.error));
+        if (!wire) throw new Error("No MCP result in event stream");
+      }
     } catch {
-      return { ok: false, error: "OpenSEO did not return a JSON MCP response" };
+      return { ok: false, error: "OpenSEO did not return a supported MCP response" };
     }
     if (wire.error || wire.result?.isError) {
       return { ok: false, error: wire.error?.message ?? "OpenSEO tool returned an error" };
