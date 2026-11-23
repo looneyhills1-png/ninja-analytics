@@ -94,6 +94,12 @@ export const NAV_GROUPS: NavGroup[] = [
         help: "Which other sites appear for the same searches as you.",
       },
       {
+        to: "/open-seo",
+        label: "OpenSEO research",
+        icon: Database,
+        help: "Read saved OpenSEO keywords, rank trackers, AI answers and citation sources from your local server. Never runs paid lookups.",
+      },
+      {
         to: "/content",
         label: "Content ideas",
         icon: FileText,

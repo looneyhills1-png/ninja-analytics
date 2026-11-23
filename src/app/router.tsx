@@ -38,6 +38,7 @@ import { CompetitorsLinksPage } from "@/features/competitors/CompetitorsLinksPag
 import { SiteAuditPage } from "@/features/site-audit/SiteAuditPage";
 import { IndexingPage } from "@/features/indexing/IndexingPage";
 import { AiVisibilityPage } from "@/features/ai-visibility/AiVisibilityPage";
+import { OpenSeoPage } from "@/features/open-seo/OpenSeoPage";
 import { OpportunitiesPage } from "@/features/intelligence/OpportunitiesPage";
 import { AiReadinessPage } from "@/features/intelligence/AiReadinessPage";
 import { ContentIntelligencePage } from "@/features/intelligence/ContentIntelligencePage";
@@ -142,6 +143,7 @@ export const router = createBrowserRouter(
             { path: "/site-audit", element: <SiteAuditPage /> },
             { path: "/indexing", element: <IndexingPage /> },
             { path: "/ai-visibility", element: <AiVisibilityPage /> },
+            { path: "/open-seo", element: <OpenSeoPage /> },
             { path: "/opportunities", element: <OpportunitiesPage /> },
             { path: "/content", element: <ContentIntelligencePage /> },
             { path: "/ai-readiness", element: <AiReadinessPage /> },
