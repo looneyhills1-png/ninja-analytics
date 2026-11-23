@@ -27,19 +27,6 @@ jobs:
 
       - run: npm ci
 
-      # Temporary one-shot formatter to recover exact Prettier output via CI logs.
-      # This will be removed before merge.
-      - name: Normalize OpenSEO integration and emit formatted source
-        run: |
-          FILES="scripts/open-seo-bridge.mjs scripts/open-seo-bridge.test.mjs scripts/serve-local.mjs src/features/open-seo/OpenSeoPage.tsx"
-          ./node_modules/.bin/prettier --write $FILES
-          for file in $FILES; do
-            echo "FORMATTED_START:$file"
-            base64 -w0 "$file"
-            echo ""
-            echo "FORMATTED_END:$file"
-          done
-
       # Same checklist CONTRIBUTING.md asks contributors to run locally
       # before opening a PR - CI just makes it non-optional.
       - name: Format check

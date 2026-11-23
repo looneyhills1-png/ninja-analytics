@@ -53,11 +53,13 @@ import { createOpenSeoBridge } from "./open-seo-bridge.mjs";
 // The key is optional for a loopback-only OpenSEO instance in local_noauth
 // mode. For password mode, keep it in an unserved local text file (not git).
 function readOpenSeoKey() {
-  try { return readFileSync(join(here, "open-seo-api-key.txt"), "utf8").trim(); }
-  catch { return process.env.OPENSEO_API_KEY ?? ""; }
+  try {
+    return readFileSync(join(here, "open-seo-api-key.txt"), "utf8").trim();
+  } catch {
+    return process.env.OPENSEO_API_KEY ?? "";
+  }
 }
 const openSeo = createOpenSeoBridge({ apiKey: readOpenSeoKey() });
-
 
 const usageFile = join(here, "local-ai-usage.json");
 const localAi = createLocalAi({
@@ -114,7 +116,6 @@ async function localAiRoute(req, res, pathname) {
   return deny(res, 404, "Not found");
 }
 
-
 async function openSeoRoute(req, res, pathname) {
   const verdict = checkLocalCall({ headers: req.headers }, port);
   if (!verdict.ok) return deny(res, verdict.status, verdict.reason);
@@ -128,14 +129,21 @@ async function openSeoRoute(req, res, pathname) {
       if (raw.length > 4000) return deny(res, 413, "too large");
     }
     let body;
-    try { body = JSON.parse(raw); }
-    catch { return deny(res, 400, "bad json"); }
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return deny(res, 400, "bad json");
+    }
     try {
       const result = await openSeo.call(body?.tool, body?.args);
       return sendJson(res, result.ok ? 200 : 502, result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "invalid request";
-      return sendJson(res, message.includes("budget") ? 429 : 400, { ok: false, error: message });
+      const message =
+        error instanceof Error ? error.message : "invalid request";
+      return sendJson(res, message.includes("budget") ? 429 : 400, {
+        ok: false,
+        error: message,
+      });
     }
   }
   return deny(res, 404, "Not found");

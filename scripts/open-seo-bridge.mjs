@@ -12,23 +12,31 @@ const TOOLS = new Set([
   "get_ai_visibility_sources",
   "get_ai_visibility_trend",
 ]);
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_CALLS_HOUR = 60;
 const CACHE_MS = 60_000;
 
 export function safeOpenSeoArgs(tool, candidate) {
-  if (!TOOLS.has(tool)) throw new Error("Tool not allowed: chargeable or mutating tools are disabled");
+  if (!TOOLS.has(tool))
+    throw new Error(
+      "Tool not allowed: chargeable or mutating tools are disabled",
+    );
   if (tool === "list_projects") return {};
   if (!candidate || !UUID.test(candidate.projectId ?? "")) {
     throw new Error("Invalid OpenSEO project ID");
   }
   const args = { projectId: candidate.projectId };
   if (tool === "get_rank_tracker" && candidate.trackerId != null) {
-    if (!UUID.test(candidate.trackerId)) throw new Error("Invalid rank tracker ID");
+    if (!UUID.test(candidate.trackerId))
+      throw new Error("Invalid rank tracker ID");
     args.trackerId = candidate.trackerId;
     args.limit = 50;
   }
-  if (tool === "get_ai_visibility_results" || tool === "get_ai_visibility_sources") {
+  if (
+    tool === "get_ai_visibility_results" ||
+    tool === "get_ai_visibility_sources"
+  ) {
     args.limit = 25;
     args.competitorGap = false;
     args.branded = "neutral";
@@ -48,8 +56,13 @@ export function createOpenSeoBridge({
   if (
     url.protocol !== "http:" ||
     !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
-    url.username || url.password || url.pathname !== "/" || url.search || url.hash
-  ) throw new Error("OpenSEO must use a direct loopback HTTP URL");
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    throw new Error("OpenSEO must use a direct loopback HTTP URL");
   let windowStart = now();
   let used = 0;
   const cache = new Map();
@@ -59,7 +72,8 @@ export function createOpenSeoBridge({
       used = 0;
       cache.clear();
     }
-    if (used >= MAX_CALLS_HOUR) throw new Error("OpenSEO read budget reached (60 calls/hour)");
+    if (used >= MAX_CALLS_HOUR)
+      throw new Error("OpenSEO read budget reached (60 calls/hour)");
     used += 1;
   }
   async function status() {
@@ -75,18 +89,23 @@ export function createOpenSeoBridge({
           : "OpenSEO health returned HTTP " + response.status,
       };
     } catch {
-      return { online: false, configured: Boolean(apiKey), message: "No OpenSEO service at 127.0.0.1:3001" };
+      return {
+        online: false,
+        configured: Boolean(apiKey),
+        message: "No OpenSEO service at 127.0.0.1:3001",
+      };
     }
   }
   async function call(tool, candidate = {}) {
     const args = safeOpenSeoArgs(tool, candidate);
     const key = JSON.stringify({ tool, args });
     const cached = cache.get(key);
-    if (cached && now() - cached.when < CACHE_MS) return { ...cached.value, cached: true };
+    if (cached && now() - cached.when < CACHE_MS)
+      return { ...cached.value, cached: true };
     quota();
     const headers = {
       "Content-Type": "application/json",
-      "Accept": "application/json, text/event-stream",
+      Accept: "application/json, text/event-stream",
       "MCP-Protocol-Version": "2025-06-18",
     };
     if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
@@ -106,9 +125,11 @@ export function createOpenSeoBridge({
     } catch {
       return { ok: false, error: "OpenSEO is unreachable or timed out" };
     }
-    if (!response.ok) return { ok: false, error: "OpenSEO returned HTTP " + response.status };
+    if (!response.ok)
+      return { ok: false, error: "OpenSEO returned HTTP " + response.status };
     const text = await response.text();
-    if (text.length > 1_000_000) return { ok: false, error: "OpenSEO response exceeded 1 MB" };
+    if (text.length > 1_000_000)
+      return { ok: false, error: "OpenSEO response exceeded 1 MB" };
     let wire;
     try {
       // MCP Streamable HTTP may choose either JSON or server-sent events.
@@ -116,26 +137,46 @@ export function createOpenSeoBridge({
       try {
         wire = JSON.parse(text);
       } catch {
-        const events = text.split(/\r?\n/).filter((line) => line.startsWith("data:"));
-        wire = events.map((line) => {
-          try { return JSON.parse(line.slice(5).trim()); } catch { return null; }
-        }).find((value) => value && (value.result || value.error));
+        const events = text
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"));
+        wire = events
+          .map((line) => {
+            try {
+              return JSON.parse(line.slice(5).trim());
+            } catch {
+              return null;
+            }
+          })
+          .find((value) => value && (value.result || value.error));
         if (!wire) throw new Error("No MCP result in event stream");
       }
     } catch {
-      return { ok: false, error: "OpenSEO did not return a supported MCP response" };
+      return {
+        ok: false,
+        error: "OpenSEO did not return a supported MCP response",
+      };
     }
     if (wire.error || wire.result?.isError) {
-      return { ok: false, error: wire.error?.message ?? "OpenSEO tool returned an error" };
+      return {
+        ok: false,
+        error: wire.error?.message ?? "OpenSEO tool returned an error",
+      };
     }
     const structured = wire.result?.structuredContent;
     if (!structured || typeof structured !== "object") {
       return { ok: false, error: "OpenSEO returned no structured result" };
     }
     if (structured.status === "error") {
-      return { ok: false, error: structured.message || structured.code || "OpenSEO read failed" };
+      return {
+        ok: false,
+        error: structured.message || structured.code || "OpenSEO read failed",
+      };
     }
-    const result = { ok: true, data: structured.status === "success" ? structured.data : structured };
+    const result = {
+      ok: true,
+      data: structured.status === "success" ? structured.data : structured,
+    };
     cache.set(key, { when: now(), value: result });
     return result;
   }
